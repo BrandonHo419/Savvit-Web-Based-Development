@@ -1,5 +1,5 @@
 // API key for accessing YouTube Data API
-const API_KEY = 'AIzaSyBvLpsR-6dnB_LMozLi8MNlhNjaqD55W8o';
+const API_KEY = ''; // removed API key from public
 
 // DOM elements for search bar and video display grid
 const searchBar = document.getElementById('search-bar');
