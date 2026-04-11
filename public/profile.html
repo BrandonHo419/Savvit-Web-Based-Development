@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+
+<head>
+  <title>Main</title>
+  <meta charset=UTF-8>
+  <link rel="stylesheet" href="/css/profile.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&family=Raleway:ital@0;1&family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap"
+    rel="stylesheet">
+
+  <script src="/js/profile.js"></script>
+</head>
+
+<body>
+  <header>
+    <a a href="/home.html"><h1>Savvit</h1></a>
+    <div class="nav-link">
+      <!-- Left stuff -->
+      <div class="nav-left">
+        <a href="#"><i class="fa-solid fa-plus"></i></a>
+        <!-- Links to create.html -->
+      </div>
+
+      <!-- search bar -->
+      <div class="nav-center">
+        <input type="text" placeholder="Search..." class="search-bar" />
+      </div>
+
+      <!-- Right stuff -->
+      <div class="nav-right">
+        <a href="messages.html">
+          <div class="icon-wrapper">
+            <i class="fa-solid fa-message" style="margin-left: 0.5em"></i>
+            <span class="notification-badge">4</span>
+          </div>
+        </a>
+
+        <a href="notifications.html">
+          <div class="icon-wrapper">
+            <i class="fa-solid fa-bell" style="margin-left: 0.5em"></i>
+            <span class="notification-badge">2</span>
+          </div>
+        </a>
+
+        <div class="profile-dropdown">
+          <button class="profile-btn" type="button">
+            <i class="fa-solid fa-user"></i>
+          </button>
+          <div class="dropdown-menu">
+            <a href="settings.html">Settings</a>
+            <button type="button" onclick="logout()" id="logOutButton">Logout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="card" id="profile">
+    <div class="imageContainer">
+      <i class="fa-solid fa-circle-user" id="profileIcon"></i>
+      <input type="file" id="imageButton" accept="image/png, image/jpg" style="display: none;" />
+    </div>
+
+    <div class="title" id="username"></div>
+
+    <div class="mainContainer">
+      <p id="email"></p>
+      <p id="interests">Interests: </p>
+    </div>
+  </div>
+
+  <div class="card" id="profile-pins">
+    <button type="button">Created Tabs</button>
+    <button type="button">Tabs</button>
+  </div>
+
+</body>
+
+</html>

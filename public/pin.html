@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    >
+
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/pin_style.css">
+    <link href="https://fonts.googleapis.com/css?family=Noto+Sans" rel="stylesheet">
+
+    <script src="/js/pin_script.js" defer></script>
+
+    <title>Document</title>
+</head>
+
+<body>
+    <input type="file" name="picture" id="picture">
+    <div class="pin_card">
+
+        <!--title -->
+        <div class="pin_title"></div>
+        <!-- modal-->
+        <div class="pin_modal">
+            <!-- modal head -->
+            <div class="modal_head">
+                <!-- save -->
+                <div class="save_card">Save</div>
+            </div>
+
+            <div class="modal_foot">
+                <!-- destination -->
+                <div class="destination">
+                    <div class="icon_container">
+                        <i class="fa-solid fa-arrow-up pin-icons"></i>
+                    </div>
+                    <span>default</span>
+                </div>
+
+                <!-- send -->
+                <div class="icon_container">
+                    <i class="fa-solid fa-share pin-icons"></i>
+                </div>
+
+                <!-- edit -->
+                <div class="icon_container">
+                    <i class="fa-solid fa-ellipsis pin-icons"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- image -->
+        <div class="pin_image">
+            <img id="previewImage" src="blank" alt="pin_image">
+        </div>
+
+    </div>
+</body>
+
+</html>

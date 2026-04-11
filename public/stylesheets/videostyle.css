@@ -1,0 +1,19 @@
+/* === IMAGE WRAPPER === */
+.pin_image {
+  position: relative;
+  width: 90%;
+  aspect-ratio: 9 / 16; /* Changed from 16/9 to 9/16 for portrait orientation */
+  overflow: hidden;
+  background-color: #000;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.pin_image img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 90%;
+  height: 90%;
+  object-fit: cover;
+}

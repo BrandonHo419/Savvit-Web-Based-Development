@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+
+<head>
+  <title>Admin</title>
+  <meta charset=UTF-8>
+  <link rel="stylesheet" href="/css/admin.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&family=Raleway:ital@0;1&family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap"
+    rel="stylesheet">
+
+  <script src="/js/admin.js"></script>
+</head>
+
+<body>
+ <div id="adminContent">
+  <header>
+    <h1>Admin Page</h1>
+    <div class="nav-link">
+
+      <!-- Right stuff -->
+      <div class="nav-right">
+        <div class="profile-dropdown">
+          <button class="profile-btn" type="button">
+            <i class="fa-solid fa-user"></i>
+          </button>
+          <div class="dropdown-menu">
+            <button type="button" onclick="logout()" id="logOutButton">Logout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+<div class="user-action-wrapper">
+ <div class="card" id="user-info-form" style="max-width: 600px;">
+  <div id="userOptions">
+    <h2>User Options</h2>
+    <button type="submit" class="submit-btn" id="toggleBtnAdd">Add User</button>
+  </div>
+  <p id="error-message"></p>
+  <form id="singleUserFormAdd">
+    <label for="username">Username</label>
+    <input type="text" id="username" required>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" required>
+
+    <label for="password">Password - Automacially hashed</label>
+    <input type="password" id="password" required>
+
+    <label for="role">Role</label>
+    <select id="role">
+      <option value="user">User</option>
+      <option value="admin">Admin</option>
+    </select>
+
+    <div style="margin-top: 1em;">
+      <button type="submit" class="submit-btn" id="add-userBtn">Add</button>
+      <button type="reset" class="submit-btn" style="background-color: darkred;">Clear</button>
+    </div>
+  </form>
+</div>
+
+<div class="card user-delete-card">
+  <form id="singleUserFormDel" class="inline-delete-form">
+    <h2>Delete</h2>
+    <input type="number" id="delete" placeholder="User ID" required>
+    <button type="submit" class="submit-btn delete-btn">Delete</button>
+    <p id="del-message"></p>
+  </form>
+</div>
+</div>
+
+
+<div class="card customer-card">
+    <h2 class="section-title">Users</h2>
+    <table class="customer-table">
+        <thead>
+            <tr>
+                <th>User ID</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Avatar</th>
+                <th>Role</th>
+                <th>Date Registered</th>
+            </tr>
+        </thead>
+        <tbody>
+
+        </tbody>
+    </table>
+</div>
+</div>
+
+
+</body>
+
+</html>

@@ -1,0 +1,44 @@
+.collection-card {
+  display: block;
+  break-inside: avoid;
+  background-color: rgb(3, 34, 33);
+  border-radius: 16px;
+  overflow: hidden;
+cursor: pointer;
+  margin-bottom: 0;
+}
+.collection-card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.collection-thumb {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgb(3, 34, 33);
+  overflow: hidden;
+}
+.collection-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+.collection-info {
+  padding: 10px;
+}
+.collection-info h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.collection-card {
+  break-inside: avoid;
+}
+
+.modalContainer #more-button {
+  display: none;
+}

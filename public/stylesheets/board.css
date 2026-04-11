@@ -1,0 +1,202 @@
+:root {
+    --card_width: 259px;
+    --card_border_radius: 16px;
+    --row_increment: 10px;
+    --gap: 15px;
+}
+
+.pin_container {
+  column-count: 6; /* You can use media queries for responsiveness */
+  column-gap: 15px;
+  padding: 16px;
+}
+
+#explore-grid  {
+  column-count: 6;
+  column-gap: 15px;
+  padding: 16px;
+}
+
+
+#collections-grid  {
+  column-count: 6;
+  column-gap: 15px;
+  padding: 16px;
+}
+
+@media (max-width: 1200px) {
+  .pin_container,
+  #explore-grid, #collections-grid{
+    column-count: 5;
+  }
+}
+
+@media (max-width: 800px) {
+  .pin_container,
+  #explore-grid, #collections-grid {
+    column-count: 4;
+  }
+}
+
+@media (max-width: 500px) {
+  .pin_container,
+  #explore-grid , #collections-grid {
+    column-count: 3;
+  }
+}
+.board_container {
+  position: relative;
+  width: 100%;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+.pin_card {
+  display: inline-block;
+  width: 100%;
+  margin-bottom: 15px;
+  border-radius: 16px;
+  background-color: rgb(3, 34, 33);
+  overflow: hidden;
+  break-inside: avoid;
+  position: relative;
+}
+:root {
+  --navbar-height: 100px;
+}
+
+.navigation_bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--navbar-height);
+  background-color: rgb(3, 34, 33);
+  z-index: 998;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+.main_content {
+  padding-top: var(--navbar-height); /* space below the fixed nav */
+}
+
+.pin_card.landscape {
+  grid-column: span 2;
+
+}
+.pin_card.landscape .pin_image img {
+  height: 236px;
+  object-fit: cover;
+}
+.create_board_modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+   z-index: 10000; /* make sure it’s above other elements */
+}
+
+.modal_content {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.create_board_modal.hidden {
+  display: none !important;
+}
+
+
+.small-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  margin-right: 8px;
+  object-fit: cover;
+}
+.comment-user-link,
+.reply-user-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: #0077cc;
+}
+.comment-user-link:hover,
+.reply-user-link:hover {
+  text-decoration: underline;
+}
+.avatar-fallback {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #bbb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  font-size: 16px;
+  text-transform: uppercase;
+}
+
+.upload-link-popup {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 12px 16px;
+  border: 1px solid #ccc;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 2000;
+  display: none;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-link-popup {
+  position: fixed;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999; /* Ensure it's above the modal */
+  display: none;
+  background: white;
+  border: 1px solid #ccc;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.upload-link-popup input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  min-width: 280px;
+}
+
+.upload-link-popup button {
+  padding: 6px 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.close-popup-btn {
+  font-size: 18px;
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+}

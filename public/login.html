@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!---===== FONTS =====--->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&family=Raleway:ital@0;1&family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap"
+        rel="stylesheet">
+    <meta charset="UTF-8">
+    <title>LogInPage</title>
+    <!---===== CSS =====--->
+    <link rel="stylesheet" href="/css/loginSignUp.css">
+
+</head>
+
+<body>
+    <div class="background">
+        <div class="login">
+            <form class="login-form" id="form">
+                <h1 class="login-title">Login</h1>
+                <p class="login-signup" id="error-message"></p>
+                <div class="login-content">
+                    <div class="login-box">
+                        <i class="fa-solid fa-envelope login-icon"></i>
+
+                        <div class="login-box-input">
+                            <input type="email" required class="login-input" placeholder=" " id="email-input">
+                            <label for="" class="login-label">Email</label>
+                        </div>
+                    </div>
+                    <div class="login-box">
+                        <i class="fa-solid fa-lock login-icon"></i>
+
+                        <div class="login-box-input">
+                            <input type="password" required class="login-input" id="login-pass" placeholder=" ">
+                            <label for="" class="login-label">Password</label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="login-button">Continue</button>
+
+                <p class="login-signup">
+                    Don't have an account? <a href="/signup.html">Sign Up!</a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <!---===== JS =====--->
+    <script src="./js/login.js"></script>
+    <!---===== FONTAWESOME =====--->
+    <script src="https://kit.fontawesome.com/b8ea624d11.js" crossorigin="anonymous"></script>
+</body>
+
+</html>

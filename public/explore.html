@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Savvit Explore</title>
+    <link href="http://fonts.googleapis.com/css?family=Noto+Sans" rel="stylesheet">
+    <link rel="stylesheet" href="./stylesheets/personalised-recommendatinos.css">
+    <link rel="stylesheet" href="./stylesheets/pin_style_fixed.css">
+    <link rel="stylesheet" href="./stylesheets/videostyle.css">
+    <script src="http://kit.fontawesome.com/49190efb46.js" crossorigin="anonymous" defer></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Savvit Explore</h1>
+            <div class="nav">
+                <a href="home.html">Home</a>
+                <a href="explore.html">Explore</a>
+                <a href="profile.html">Profile</a>
+                <a href="landingpage.html">Logout</a>
+            </div>
+            <input type="search" placeholder="Search for content" class="search-bar" id="search-bar">
+        </div>
+
+        <div class="welcome">
+            <h2>Discover Random Content!</h2>
+            <p>Explore a variety of YouTube videos.</p>
+        </div>
+
+        <div class="section">
+            <h3>Random Recommendations</h3>
+            <div class="grid" id="video-grid"></div>
+        </div>
+    </div>
+
+    <script type="module" src="./js/explorepage.js"></script>
+    <script src="./js/redirection.js"></script>
+</body>
+</html>

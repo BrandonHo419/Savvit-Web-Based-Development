@@ -1,0 +1,328 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: sans-serif;
+}
+
+h1 {
+    max-width: 500px;
+    font-size: clamp(2rem, 7vw, 3rem);
+    text-align: left;
+    line-height: 1;
+    font-family: "Titillium Web", sans-serif;
+    font-style: normal;
+}
+
+p {
+    font-family: "Titillium Web", sans-serif;
+    font-size: 30px;
+    font-style: normal;
+    font-weight: 400;
+}
+
+/* PAGE 1 */
+
+.page1 {
+    display: flex;
+    flex-direction: column; /* header stays on top */
+    height: 100vh;
+    background-color: rgb(2, 27, 26);
+}
+
+header {
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 15%;
+    background-color: rgb(3, 34, 33);
+    padding: 0 20px;
+    border-bottom: 2px solid rgb(0, 223, 129);
+}
+
+.logo {
+    font-family: "Titillium Web", sans-serif;
+    font-style:normal;
+    font-weight: bold;
+    font-size: 30px;
+    color: rgb(241, 247, 246);
+}
+
+.nav-link {
+    display: flex; /* important: make links flex container */
+    gap: 20px; /* spacing between links */
+}
+
+.nav-link a {
+    color: rgb(241, 247, 246);
+    font-family: "Titillium Web", sans-serif;
+    font-style:normal;
+    font-weight: bold;
+    font-size: 20px;
+    text-decoration: none;
+}
+
+.page1-container {
+    display: flex; /* make it flex */
+    justify-content: center; /* center horizontally */
+    align-items: center; /* center vertically */
+    text-align: center;
+    background-color:  rgb(2, 27, 26);
+    width: 0%;
+    height: 0%;
+    margin:auto;
+    border-right: 3px solid rgb(0, 223, 129);
+    border-left: 3px solid rgb(0, 223, 129);
+    color:rgb(241, 247, 246);
+    padding: 2.5rem 1.5rem;
+    animation: widen 2s ease-in-out forwards;
+}
+
+@keyframes widen {
+    0% {
+        width: 0%;
+        height: 0%;
+        color: rgba(241, 247, 246, 0);
+    }
+
+    80% {
+        color: rgba(241, 247, 246, 0);
+    }
+
+    100% {
+        width: 90%;
+        height: 30%;
+        color: rgba(241, 247, 246, 1);
+    }
+}
+
+/* PAGE 2 */
+
+.page2-container {
+    display: flex;
+    z-index: 3;
+    top: 0;
+    left: 0;
+    height: auto;
+    width: 50%;
+    position: relative;
+    align-items: center;
+    background-color: transparent;
+}
+
+.page2-content {
+    padding: 10px;
+    color: rgb(241, 247, 246);
+}
+
+.things {
+    display: inline-flex;
+    flex-direction: column;
+    border-bottom: 2px solid rgb(0, 223, 129);
+    height: 3em;
+    width: 27%;
+    overflow: hidden;
+    text-align: left;
+    line-height: 1.5em;
+    margin-top: 30px;
+}
+
+.things h2 {
+    color: rgb(3, 34, 33);
+    font-size: 2em;
+    margin: 0;
+    line-height: 1.5em;
+    font-family: "Titillium Web", sans-serif;
+    font-style: italic;
+    font-weight:bold;
+    animation: auto-scroll 10s infinite;
+}
+
+.page2-images {
+    display: flex;
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+    gap: 1em;
+    padding: 1em;
+    background-color: rgb(3, 98, 76);
+}
+
+.column {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.column-content {
+    display: flex;
+    flex-direction: column;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+}
+
+.column1::before,
+.column1::after,
+.column2::before,
+.column2::after,
+.column3::before,
+.column3::after,
+.column4::before,
+.column4::after {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 20%;
+    content: "";
+    z-index: 2;
+}
+
+.column1::before,
+.column2::before,
+.column3::before,
+.column4::before {
+    top: 0;
+    background: linear-gradient(to top, rgba(3, 98, 76, 0), rgb(3, 98, 76));
+}
+
+.column1::after,
+.column2::after,
+.column3::after,
+.column4::after {
+    bottom: 0;
+    background: linear-gradient(to bottom, rgba(3, 98, 76, 0), rgb(3, 98, 76));
+}
+
+.column1 .column-content {
+    animation-name: scrollUp;
+    animation-duration: 30s;
+}
+
+.column2 .column-content {
+    animation-name: scrollUp;
+    animation-duration: 50s;
+}
+
+.column3 .column-content {
+    animation-name: scrollUp;
+    animation-duration: 40s;
+}
+
+.column4 .column-content {
+    animation-name: scrollUp;
+    animation-duration: 60s;
+}
+
+img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    border-radius: 1em;
+    margin-bottom: 1em;
+}
+
+/* Once it reaches 100%, use javascript to randomly select images
+to replace the old ones*/
+@keyframes scrollUp {
+    0% {
+        opacity: 0;
+        transform: translateY(0);
+    }
+
+    20% {
+        opacity: 1;
+    }
+
+    80% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-50%);
+    }
+}
+
+/* Currently bit iffy
+@keyframes scrollDown {
+    0% {
+        transform: translateY(-50%);
+    }
+
+    100% {
+        transform: translateY(0);
+    }
+}
+*/
+
+@keyframes auto-scroll {
+    0% {
+        transform: translateY(0);
+    }
+
+    33% {
+        transform: translateY(-1.5em);
+    }
+
+    66% {
+        transform: translateY(-3em);
+    }
+
+    100% {
+        transform: translateY(-4.5em);
+    }
+}
+
+/* PAGE 3 */
+
+.page3 {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+    background-color: rgb(241, 247, 246);
+}
+
+.page3-container2 {
+    display: flex;
+    width: 100%;
+    align-items: flex-end;
+}
+
+.wavy-text1 {
+    margin-right: 10px;
+    height: 60px;
+    width: 1200px;
+    display: flex; /* flex container */
+    justify-content: space-between; /* center if you prefer */
+    align-items: center;
+    margin: auto;
+    margin-bottom: 40px;
+}
+
+.wavy-text1 span {
+    flex: 1; /* each letter takes equal space */
+    text-align: center;
+    animation: wave 7s ease-in-out infinite;
+    animation-delay: calc(var(--n) * 0.2s);
+}
+
+@keyframes wave {
+    0%, 20%, 100% {
+        transform: translateY(0);
+    }
+
+    10% {
+        transform: translateY(-20px);
+    }
+}
+
+@media (max-width: 768px) {
+    .page2-container {
+        width: 100%;
+    }
+}
