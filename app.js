@@ -3,11 +3,12 @@ const session = require('express-session');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
-const mysql = require('mysql');
+const mysql = require('mysql2');
 const passport = require('passport');
 const createPassport = require('./passportStruct');
 
-const indexRouter = require('./routes/index');
+const pinsRouter = require('./routes/pins');
+const boardsRouter = require('./routes/boards');
 const usersRouter = require('./routes/users');
 
 require('dotenv').config();
@@ -16,8 +17,13 @@ const app = express();
 
 // create a 'pool' (group) of connections to be used for connecting with our SQL server
 const dbConnectionPool = mysql.createPool({
-    host: 'localhost',
-    database: 'pinterest_clone'
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT || 3306),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10
 });
 
 app.use(function (req, res, next) {
@@ -83,7 +89,22 @@ app.use(passport.session());
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', indexRouter);
 app.use('/users', usersRouter);
+
+function requireAuth(req, res, next) {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({
+            error: 'Authentication required'
+        });
+    }
+    next();
+}
+
+app.use('/pins', requireAuth, pinsRouter);
+app.use('/boards', requireAuth, boardsRouter);
+
+app.get('/', (req, res) => {
+    res.redirect('/landingpage.html');
+});
 
 module.exports = app;
