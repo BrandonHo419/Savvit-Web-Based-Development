@@ -27,8 +27,12 @@ ORDER BY b.created_at DESC;`,
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to get boards', details: err });
-  }
+    console.error('Failed to get boards:', err);
+
+    res.status(500).json({
+        error: 'Failed to get boards'
+    });
+}
 };
 
 exports.createBoard = async (req, res) => {

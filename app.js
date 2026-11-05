@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
@@ -11,7 +13,7 @@ const pinsRouter = require('./routes/pins');
 const boardsRouter = require('./routes/boards');
 const usersRouter = require('./routes/users');
 
-require('dotenv').config();
+
 
 const app = express();
 
