@@ -161,3 +161,23 @@ exports.getPublicBoards = async (req, res) => {
     res.status(500).json({ error: 'Unable to load public boards' });
   }
 };
+
+// Removing membership does not require permission to read the original pin.
+exports.removeReference = async (req, res) => {
+  if (!validId(req.params.pin_id)) return res.status(400).json({ error: 'Invalid pin ID' });
+  try {
+    // Recheck ownership in the mutation; never remove an original-board membership.
+    await pool.query(
+      `DELETE saved FROM board_pins saved
+       JOIN boards destination ON destination.board_id = saved.board_id
+       JOIN pins original ON original.pin_id = saved.pin_id
+       WHERE saved.board_id = ? AND saved.pin_id = ? AND destination.user_id = ?
+         AND original.board_id <> saved.board_id`,
+      [req.params.board_id, req.params.pin_id, req.user.user_id]
+    );
+    res.status(204).end();
+  } catch (err) {
+    console.error('Failed to remove saved reference:', err);
+    res.status(500).json({ error: 'Unable to remove saved reference' });
+  }
+};

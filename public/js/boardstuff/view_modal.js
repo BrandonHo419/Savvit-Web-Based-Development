@@ -1,3 +1,4 @@
+import { setupReferenceRemoval, canDeleteOriginal } from './reference_removal.js';
 import { safeHttpUrl } from '../content.js';
 import { apiFetch } from '../api.js';
 
@@ -52,9 +53,15 @@ function openPinModal(pin) {
 
   }
 
-  // Trash icon visibility
+  setupReferenceRemoval(modal, pin, state, () => {
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    loadPinsForBoard(state.activeBoardId);
+  });
+
+  // Original deletion is available only while viewing the owned original board.
   if (deleteIcon) {
-    if (Number(pin.user_id) !== Number(state.userId) || !pin.board_id) {
+    if (!canDeleteOriginal(pin, state)) {
       deleteIcon.style.display = 'none';
     } else {
       const newDeleteIcon = deleteIcon.cloneNode(true);
@@ -62,7 +69,7 @@ function openPinModal(pin) {
       deleteIcon.replaceWith(newDeleteIcon);
 
       newDeleteIcon.addEventListener('click', () => {
-        if (!confirm('Are you sure you want to delete this pin?')) return;
+        if (!confirm('Delete this original pin and all saved references to it? This cannot be undone.')) return;
         deletePin(pin.id, () => {
           modal.style.display = 'none';
           document.body.style.overflow = '';

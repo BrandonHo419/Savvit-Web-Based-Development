@@ -152,7 +152,7 @@ The new `GET /boards/:board_id` endpoint returns accessible board metadata and a
 `is_owner` flag; the server still enforces all permissions independently of the UI.
 No schema migration or backfill is needed: existing originals continue to appear
 through `pins.board_id`. Deleting boards, semi-private
-invitations and removing individual saved references remain pending.
+invitations remain pending. Individual saved references can be removed as described in Stage 6.
 
 Manual workflow check:
 
@@ -294,3 +294,45 @@ Verify locally with two accounts: publish a board in account A; in account B,
 open Public boards, search its name, and open it. Owner settings must be absent.
 Make it private as A, then search again as B: it must disappear, and its direct
 URL must deny access. Search for an unmatched name to verify the empty state.
+
+
+### Saved-reference removal (Stage 6)
+
+On a board you own, open a pin saved from another board and choose **Remove from
+this board**. Confirm to remove that reference only. The original pin, its
+comments, likes, uploads, historical save engagements and references on other
+boards remain unchanged. **Delete original pin** is offered only on the owned
+original board and retains its existing destructive behaviour.
+
+`DELETE /boards/:board_id/pins/:pin_id/reference` requires a session, CSRF token
+and destination-board ownership. The server rechecks ownership in the deletion
+query. It returns an empty 204 for a removed, already absent or nonexistent
+reference. It also leaves original-board memberships unchanged and returns 204.
+Invalid pin IDs return 400; missing/inaccessible destination boards return 404;
+database failures return a generic 500. Existing global authentication/CSRF
+middleware applies (a request without CSRF is rejected with 403 first).
+
+The endpoint permits cleanup after access to the original is revoked without
+returning original content or revealing whether the original exists. Inaccessible
+pins remain hidden in the interface; no hidden-pin management screen is added.
+Save engagements remain historical records because the schema does not associate
+them with destination boards. Removing and then saving again records a new save.
+No schema changes or new dependencies are required.
+
+Local verification (two browser profiles and real MySQL):
+1. As A, publish an original pin. As B, save it to two owned boards.
+2. On B's first board, open it and choose Remove from this board. Cancel once;
+   verify it remains. Confirm removal, then reload: only that reference disappears.
+3. Confirm the original remains on A's board and the other reference remains on
+   B's second board. B must not see Delete original pin for either reference.
+4. Save the pin to B's first board again; it should reappear once.
+5. Save one of your own originals to another owned board. That saved copy offers
+   Remove from this board; the original board offers Delete original pin.
+6. Make A's original board private. B's references must disappear, discovery must
+   omit A's board, and direct board/pin/upload access must be denied. A retains access.
+
+Automated coverage includes ownership, CSRF, invalid IDs, repeated removal,
+revoked original access, preservation of originals/other memberships, database
+failures, control visibility, cancellation, duplicate clicks, stale completion,
+and LF/CRLF frontend loading. These use database and DOM substitutes; real MySQL
+execution and browser layout require the local checks above.

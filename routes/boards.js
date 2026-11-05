@@ -8,6 +8,7 @@ const { boardAccess } = require('../middleware/authorization');
 router.get('/public', boardController.getPublicBoards);
 router.get('/users/:user_id/boards', boardController.getBoardsForUser);
 router.post('/', boardController.createBoard);
+router.delete('/:board_id/pins/:pin_id/reference', boardAccess(req => req.params.board_id, { ownerOnly: true }), boardController.removeReference);
 router.patch('/:board_id', boardAccess(req => req.params.board_id, { ownerOnly: true }), boardController.updateBoard);
 router.get('/:board_id', boardAccess(req => req.params.board_id), boardController.getBoard);
 router.get('/:board_id/pins', boardAccess(req => req.params.board_id), boardController.getPinsForBoard);

@@ -29,6 +29,7 @@ const pins = boards.map(b => ({
 const writes = [];
 const savedPins = new Set();
 let failSaveEngagement = false;
+let failReferenceRemoval = false;
 let failBoardUpdate = false;
 const uploadDirectory = path.join(__dirname, '../public/uploads');
 const uploadFilename = `authorization-test-${require('node:crypto').randomUUID()}.png`;
@@ -58,6 +59,17 @@ async function query(sql, params = []) {
         if (board) fields.forEach((field, i) => { board[field] = params[i]; });
         writes.push({ sql: q, params });
         return [{ affectedRows: board ? 1 : 0 }];
+    }
+    if (q.startsWith('DELETE saved FROM board_pins saved')) {
+        if (failReferenceRemoval) throw new Error('Simulated reference removal failure');
+        assert.match(q, /destination.user_id = \?/);
+        assert.match(q, /original.board_id <> saved.board_id/);
+        const board = boards.find(b => b.board_id === Number(params[0]) && b.user_id === params[2]);
+        const pin = pins.find(p => p.pin_id === Number(params[1]));
+        const removed = board && pin && pin.board_id !== board.board_id
+            && savedPins.delete(`${board.board_id}:${pin.pin_id}`);
+        writes.push({ sql: q, params });
+        return [{ affectedRows: removed ? 1 : 0 }];
     }
     if (q.startsWith('INSERT IGNORE INTO board_pins')) {
         const key = `${params[0]}:${params[1]}`;
@@ -553,4 +565,73 @@ test('discovery rejects malformed queries and fails closed on database errors', 
         assert.equal(response.status, 500);
         assert.deepEqual(await response.json(), { error: 'Unable to load public boards' });
     } finally { failLookup = false; }
+});
+
+
+test('reference removal preserves originals, other memberships and historical engagements', async () => {
+    savedPins.clear();
+    savedPins.add('10:210');
+    savedPins.add('11:210');
+    savedPins.add('20:210');
+    const original = { ...pins.find(p => p.pin_id === 210) };
+    const count = writes.length;
+    for (let i = 0; i < 2; i++) {
+        const response = await request('/boards/10/pins/210/reference', { actor: alice, method: 'DELETE' });
+        assert.equal(response.status, 204);
+        assert.equal(await response.text(), '');
+    }
+    assert.equal(savedPins.has('10:210'), false);
+    assert.ok(savedPins.has('11:210'));
+    assert.ok(savedPins.has('20:210'));
+    assert.deepEqual(pins.find(p => p.pin_id === 210), original);
+    assert.ok(writes.slice(count).every(w => w.sql.startsWith('DELETE saved FROM board_pins saved')));
+    assert.ok(!(await (await request('/boards/10/pins', { actor: alice })).json()).some(p => p.pin_id === 210));
+    assert.equal((await request('/pins/210', { actor: bob })).status, 200);
+});
+
+test('reference removal permits cleanup after original access is revoked without exposing it', async () => {
+    savedPins.add('10:210');
+    const board = boards.find(b => b.board_id === 21);
+    try {
+        board.visibility = 'private';
+        assert.equal((await request('/pins/210', { actor: alice })).status, 404);
+        for (const pinId of [210, 999999]) {
+            const response = await request(`/boards/10/pins/${pinId}/reference`, { actor: alice, method: 'DELETE' });
+            assert.equal(response.status, 204);
+            assert.equal(await response.text(), '');
+        }
+        assert.equal(savedPins.has('10:210'), false);
+    } finally { board.visibility = 'public'; }
+});
+
+test('reference removal cannot remove original-board membership', async () => {
+    savedPins.add('10:100');
+    assert.equal((await request('/boards/10/pins/100/reference', { actor: alice, method: 'DELETE' })).status, 204);
+    assert.ok(savedPins.has('10:100'));
+    assert.equal((await request('/pins/100', { actor: alice })).status, 200);
+});
+
+test('reference removal rejects nonowners, invalid IDs and missing CSRF without writes', async () => {
+    const count = writes.length;
+    for (const actor of [bob, admin]) {
+        assert.equal((await request('/boards/11/pins/210/reference', { actor, method: 'DELETE' })).status, 404);
+    }
+    assert.equal((await request('/boards/10/pins/210/reference', { method: 'DELETE' })).status, 403);
+    assert.equal((await request('/boards/10/pins/210/reference', { actor: alice, token: bob.token, method: 'DELETE' })).status, 403);
+    for (const id of ['0', '-1', 'abc', '9007199254740992']) {
+        assert.equal((await request(`/boards/10/pins/${id}/reference`, { actor: alice, method: 'DELETE' })).status, 400);
+        assert.equal((await request(`/boards/${id}/pins/210/reference`, { actor: alice, method: 'DELETE' })).status, 404);
+    }
+    assert.equal(writes.length, count);
+});
+
+test('reference removal database failures preserve membership and return generic errors', async () => {
+    savedPins.add('10:210');
+    try {
+        failReferenceRemoval = true;
+        const response = await request('/boards/10/pins/210/reference', { actor: alice, method: 'DELETE' });
+        assert.equal(response.status, 500);
+        assert.deepEqual(await response.json(), { error: 'Unable to remove saved reference' });
+        assert.ok(savedPins.has('10:210'));
+    } finally { failReferenceRemoval = false; }
 });
