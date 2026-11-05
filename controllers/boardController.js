@@ -98,3 +98,43 @@ exports.getBoard = (req, res) => {
     is_owner: Number(req.accessBoard.user_id) === Number(req.user.user_id)
   });
 };
+
+exports.updateBoard = async (req, res) => {
+  const body = req.body;
+  const allowed = ['name', 'description', 'visibility'];
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+      || !Object.keys(body).length || Object.keys(body).some(key => !allowed.includes(key))) {
+    return res.status(400).json({ error: 'Provide name, description or visibility only' });
+  }
+  const changes = {};
+  if (Object.hasOwn(body, 'name')) {
+    if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 255) {
+      return res.status(400).json({ error: 'Board name must contain 1 to 255 characters' });
+    }
+    changes.name = body.name.trim();
+  }
+  if (Object.hasOwn(body, 'description')) {
+    if (typeof body.description !== 'string' || body.description.length > 10000) {
+      return res.status(400).json({ error: 'Description must be text of at most 10000 characters' });
+    }
+    changes.description = body.description.trim();
+  }
+  if (Object.hasOwn(body, 'visibility')) {
+    if (!['private', 'public'].includes(body.visibility)) {
+      return res.status(400).json({ error: 'Visibility must be private or public' });
+    }
+    changes.visibility = body.visibility;
+  }
+  try {
+    // Column names come exclusively from the whitelist above; values are bound.
+    const fields = Object.keys(changes);
+    await pool.query(
+      `UPDATE boards SET ${fields.map(field => `${field} = ?`).join(', ')} WHERE board_id = ? AND user_id = ?`,
+      [...Object.values(changes), req.params.board_id, req.user.user_id]
+    );
+    res.json({ message: 'Board settings saved' });
+  } catch (err) {
+    console.error('Failed to update board:', err);
+    res.status(500).json({ error: 'Failed to update board' });
+  }
+};

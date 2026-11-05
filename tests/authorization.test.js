@@ -29,6 +29,7 @@ const pins = boards.map(b => ({
 const writes = [];
 const savedPins = new Set();
 let failSaveEngagement = false;
+let failBoardUpdate = false;
 const uploadDirectory = path.join(__dirname, '../public/uploads');
 const uploadFilename = `authorization-test-${require('node:crypto').randomUUID()}.png`;
 const uploadPath = path.join(uploadDirectory, uploadFilename);
@@ -40,6 +41,16 @@ let failUserLookup = false;
 async function query(sql, params = []) {
     const q = sql.replace(/\s+/g, ' ').trim();
     if (failLookup) throw new Error('Simulated database outage');
+    if (q.startsWith('UPDATE boards SET')) {
+        if (failBoardUpdate) throw new Error('Simulated board update failure');
+        assert.match(q, /WHERE board_id = \? AND user_id = \?$/);
+        const board = boards.find(b => b.board_id === Number(params.at(-2)) && b.user_id === params.at(-1));
+        const fields = q.slice('UPDATE boards SET '.length, q.indexOf(' WHERE')).split(', ').map(field => field.split(' = ')[0]);
+        assert.ok(fields.every(field => ['name', 'description', 'visibility'].includes(field)));
+        if (board) fields.forEach((field, i) => { board[field] = params[i]; });
+        writes.push({ sql: q, params });
+        return [{ affectedRows: board ? 1 : 0 }];
+    }
     if (q.startsWith('INSERT IGNORE INTO board_pins')) {
         const key = `${params[0]}:${params[1]}`;
         const exists = savedPins.has(key);
@@ -412,4 +423,80 @@ test('board details respect visibility and report ownership', async () => {
     const publicBoard = await (await request('/boards/11', { actor: bob })).json();
     assert.equal(ownerBoard.is_owner, true);
     assert.equal(publicBoard.is_owner, false);
+});
+
+
+test('owners can edit settings partially, clear descriptions and repeat updates', async () => {
+    const original = { ...boards[0] };
+    try {
+        for (let i = 0; i < 2; i++) {
+            const response = await request('/boards/10', { actor: alice, method: 'PATCH', body: { name: '  <b>My board</b>  ', description: '  Notes  ' } });
+            assert.equal(response.status, 200);
+        }
+        const board = await (await request('/boards/10', { actor: alice })).json();
+        assert.equal(board.name, '<b>My board</b>');
+        assert.equal(board.description, 'Notes');
+        assert.equal(board.visibility, 'private');
+        assert.equal(board.user_id, 1);
+        assert.equal((await request('/boards/10', { actor: alice, method: 'PATCH', body: { description: '' } })).status, 200);
+        assert.equal(boards[0].description, '');
+    } finally { boards[0] = original; }
+});
+
+test('board settings reject nonowners, forged identities, invalid IDs and CSRF failures without writes', async () => {
+    const count = writes.length;
+    for (const actor of [bob, admin]) {
+        for (const id of [10, 11]) {
+            assert.equal((await request(`/boards/${id}`, { actor, method: 'PATCH', body: { name: 'Hijack' } })).status, 404);
+        }
+    }
+    for (const id of ['abc', '-1', '999', '10x']) {
+        assert.equal((await request(`/boards/${id}`, { actor: alice, method: 'PATCH', body: { name: 'No' } })).status, 404);
+    }
+    for (const token of [undefined, bob.token]) {
+        assert.equal((await request('/boards/10', { actor: alice, token: token || '', method: 'PATCH', body: { name: 'No' } })).status, 403);
+    }
+    assert.equal((await request('/boards/10', { method: 'PATCH', body: { name: 'No' } })).status, 403);
+    assert.equal((await request('/boards/10', { actor: alice, method: 'PATCH', body: { user_id: 2, name: 'No' } })).status, 400);
+    assert.equal(writes.length, count);
+});
+
+test('board settings validate the complete request before writing', async () => {
+    const count = writes.length;
+    for (const body of [{}, [], { name: null }, { name: '  ' }, { name: 'x'.repeat(256) },
+        { description: null }, { description: {} }, { description: 'x'.repeat(10001) },
+        { visibility: 'semi-private' }, { visibility: 'PUBLIC' }, { visibility: null },
+        { name: 'Valid', visibility: 'invalid' }, { board_id: 20 }, { extra: true }]) {
+        assert.equal((await request('/boards/10', { actor: alice, method: 'PATCH', body })).status, 400);
+    }
+    assert.equal(writes.length, count);
+});
+
+test('visibility updates enforce original-pin privacy across references and uploads', async () => {
+    const original = { ...boards[0] };
+    savedPins.add('21:100');
+    try {
+        assert.equal((await request('/boards/10', { actor: alice, method: 'PATCH', body: { visibility: 'public' } })).status, 200);
+        assert.equal((await request('/boards/10', { actor: bob })).status, 200);
+        assert.equal((await request('/pins/100', { actor: bob })).status, 200);
+        assert.equal((await request(`/uploads/${uploadFilename}`, { actor: bob })).status, 200);
+        assert.ok((await (await request('/boards/21/pins', { actor: bob })).json()).some(pin => pin.pin_id === 100));
+        assert.equal((await request('/boards/10', { actor: alice, method: 'PATCH', body: { visibility: 'private' } })).status, 200);
+        for (const url of ['/boards/10', '/boards/10/pins', '/pins/100', '/pins/100/comments', `/uploads/${uploadFilename}`]) {
+            assert.equal((await request(url, { actor: bob })).status, 404);
+        }
+        assert.ok(!(await (await request('/boards/21/pins', { actor: bob })).json()).some(pin => pin.pin_id === 100));
+        assert.equal((await request('/pins/100', { actor: alice })).status, 200);
+    } finally { boards[0] = original; savedPins.delete('21:100'); }
+});
+
+test('failed board updates return a generic error without altering settings', async () => {
+    const original = { ...boards[0] };
+    try {
+        failBoardUpdate = true;
+        const response = await request('/boards/10', { actor: alice, method: 'PATCH', body: { name: 'No' } });
+        assert.equal(response.status, 500);
+        assert.deepEqual(await response.json(), { error: 'Failed to update board' });
+        assert.deepEqual(boards[0], original);
+    } finally { failBoardUpdate = false; }
 });

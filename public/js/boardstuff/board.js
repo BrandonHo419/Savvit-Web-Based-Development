@@ -1,3 +1,4 @@
+import { setupBoardSettings } from './board_settings.js';
 import { apiFetch } from '../api.js';
 
 import { state, onSessionReady } from './state.js';
@@ -36,6 +37,7 @@ onSessionReady(async () => {
     document.getElementById('welcome-subtitle').textContent = board.description || `${board.visibility} board`;
     document.querySelector('.add_pin').style.display = board.is_owner ? 'flex' : 'none';
     state.canEditBoard = board.is_owner;
+    setupBoardSettings(board);
   }
   await fetchBoards(boardIdFromURL);
 

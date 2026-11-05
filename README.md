@@ -151,7 +151,7 @@ repeat saves do not add duplicate engagement records.
 The new `GET /boards/:board_id` endpoint returns accessible board metadata and an
 `is_owner` flag; the server still enforces all permissions independently of the UI.
 No schema migration or backfill is needed: existing originals continue to appear
-through `pins.board_id`. Renaming/deleting boards, visibility controls, semi-private
+through `pins.board_id`. Deleting boards, semi-private
 invitations and removing individual saved references remain pending.
 
 Manual workflow check:
@@ -233,3 +233,38 @@ Savvit began as a collaborative academic web application. This repository is bei
 ## Contributing and feedback
 
 Issues and suggestions are welcome. Current work is focused on stabilising the application before expanding its feature set.
+
+
+### Board settings (Stage 4)
+
+On a board you own, expand **Board settings** to edit its name, description or
+private/public visibility. Changes take effect only after **Save settings**;
+**Reset changes** restores the last saved form values. Publishing requires a
+confirmation. Public boards currently require a signed-in viewer; anonymous
+browsing and semi-private invitations remain pending.
+
+`PATCH /boards/:board_id` accepts one or more of `name` (trimmed, 1–255 characters),
+`description` (text, up to 10,000 characters; empty clears it), and `visibility`
+(`private` or `public`). Unknown fields and invalid values return 400. The route
+requires a session, matching CSRF token, and board ownership; public visibility
+and administrator status do not grant edit access. Missing/inaccessible boards
+return 404. Omitted fields remain unchanged. Existing endpoints are unchanged.
+
+Original-board visibility still governs saved pin references and uploaded image
+access. Making a board private prevents other accounts from retrieving its pins,
+including through references on their own boards. Content already downloaded or
+shown in another browser cannot be recalled by changing visibility.
+
+No schema migration, new dependency or database backfill is required. Automated
+tests use a database substitute and form DOM substitute; they do not verify real
+MySQL SQL execution or browser layout.
+
+Local verification:
+1. Open an owned board, change its name and description, save, and reload.
+2. Edit again and reset; confirm the saved values return.
+3. Publish the board and open its URL using another signed-in account; settings
+   must not appear for that account.
+4. Save one of its pins to the second account's board. Make the original private,
+   then reload as the second account: the reference must disappear and direct
+   board/pin/upload requests must be denied. The owner retains access.
+5. Confirm an empty description can be saved and whitespace-only names cannot.

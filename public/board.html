@@ -65,6 +65,25 @@
 
       <div class="section">
         <button id="create_board_btn" type="button">+ Create Board</button>
+        <details id="board-settings" hidden>
+          <summary>Board settings</summary>
+          <form id="board-settings-form">
+            <label for="board-name">Name</label>
+            <input id="board-name" name="name" required maxlength="255">
+            <label for="board-description">Description</label>
+            <textarea id="board-description" name="description" maxlength="10000" rows="4"></textarea>
+            <label for="board-visibility">Visibility</label>
+            <select id="board-visibility" name="visibility" aria-describedby="board-visibility-help">
+              <option value="private">Private</option>
+              <option value="public">Public</option>
+            </select>
+            <p id="board-visibility-help">Private: only you can view this board. Public: other signed-in users can view it. Only you can edit it. Anonymous browsing and invited viewers are not available yet.</p>
+            <p>Changing visibility also affects access to pins originally created here, including references saved on other boards.</p>
+            <button type="submit">Save settings</button>
+            <button type="reset">Reset changes</button>
+            <p id="board-settings-status" role="status" aria-live="polite"></p>
+          </form>
+        </details>
         <p id="board-status" role="status"></p>
         <div class="pin_container"></div>
       </div>

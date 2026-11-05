@@ -218,3 +218,10 @@ body[data-page="board"] { padding: 16px; }
   [data-page="board"] #left_side .section2 { height: 240px; }
   [data-page="board"] #right_side .section2 { height: auto; }
 }
+
+#board-settings { max-width: 640px; margin: 1rem 0; padding: 1rem; border: 1px solid #ccc; border-radius: 12px; }
+#board-settings summary { cursor: pointer; font-weight: bold; }
+#board-settings-form { display: grid; gap: 0.6rem; margin-top: 1rem; }
+#board-settings-form input, #board-settings-form textarea, #board-settings-form select { box-sizing: border-box; width: 100%; padding: 0.6rem; font: inherit; }
+#board-settings-form button { padding: 0.6rem; cursor: pointer; }
+#board-settings-status { min-height: 1.5em; }
