@@ -45,10 +45,14 @@ form.addEventListener('submit', (e) => {
         xhttp.onreadystatechange = function () {
             if (this.readyState === 4) {
                 if (this.status === 200) {
-                    window.location.href = response.redirect;
-                } else {
-                    errorMessage.innerText = this.responseText;
-                }
+    const response = JSON.parse(this.responseText);
+
+    localStorage.setItem('csrfToken', response.csrfToken);
+
+    window.location.href = response.redirect;
+} else {
+    errorMessage.innerText = this.responseText;
+}
             }
         };
 
@@ -73,11 +77,13 @@ form.addEventListener('submit', (e) => {
             if (this.readyState === 4) {
                 if (this.status === 200) {
                     const response = JSON.parse(this.responseText);
+
                     localStorage.setItem('csrfToken', response.csrfToken);
+
                     window.location.href = response.redirect;
-                } else {
+            } else {
                     errorMessage.innerText = this.responseText;
-                }
+            }
             }
         };
 

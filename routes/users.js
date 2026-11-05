@@ -9,7 +9,7 @@ async function createUser(req, res, { autoLogin = false }) {
   const userName = req.body.username;
   const userEmail = req.body.email;
   const userPassword = req.body.password;
-  const userRole = req.body.role || 'user';
+  const userRole = 'user';
 
   const hash = await bcrypt.hash(userPassword, 13);
 
@@ -50,19 +50,27 @@ async function createUser(req, res, { autoLogin = false }) {
         }
 
         if (autoLogin) {
-          req.login({
-            user_id: result.insertId,
-            username: userName,
-            email: userEmail,
-            role: userRole
-          }, (err) => {
-            if (err) {
-              console.error('Login error:', err);
-              return res.sendStatus(500);
-            }
-            return res.sendStatus(200);
-          });
-        } else {
+  req.login({
+    user_id: result.insertId,
+    username: userName,
+    email: userEmail,
+    role: userRole
+  }, (err) => {
+    if (err) {
+      console.error('Login error:', err);
+      return res.sendStatus(500);
+    }
+
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    req.session.csrfToken = csrfToken;
+
+    return res.status(200).json({
+      message: 'Account created successfully',
+      csrfToken: csrfToken,
+      redirect: '/home.html'
+    });
+  });
+} else {
           return res.status(200).json({ message: "User created", user_id: result.insertId });
         }
       });
