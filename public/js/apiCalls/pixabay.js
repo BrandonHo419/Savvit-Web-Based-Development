@@ -3,7 +3,7 @@ import { handlePinClick } from "../boardstuff/view_modal.js";
 import { generateAvatarFallback } from "../boardstuff/userProfile.js";
 
 const exploreGrid = document.getElementById('explore-grid');
-const PIXABAY_API_KEY = '50709621-daf631409e28e46ed153b0bd2';
+const PIXABAY_API_KEY = '';
 
 let cachedResults = [];
 let lastQuery = '';

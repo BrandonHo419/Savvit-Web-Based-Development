@@ -1,6 +1,6 @@
 import { create_pin } from "../boardstuff/modal_and_pin_script.js";
 
-const API_KEY = 'AIzaSyAYTlMmX2pliGDz7NDmVWHFrIjnPFOckLU'; // Replace if throttled
+const API_KEY = 'YOUR_YOUTUBE_API_KEY'; // Replace with your actual YouTube API key
 const exploreGrid = document.getElementById('explore-grid');
 const QUALITY_DURATION_MIN = 180;
 const QUALITY_DURATION_MAX = 900;
