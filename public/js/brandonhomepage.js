@@ -2,7 +2,7 @@
 import { create_pin } from "./boardstuff/modal_and_pin_script.js";
 
 // YouTube API key for making requests
-const API_KEY = 'AIzaSyAYTlMmX2pliGDz7NDmVWHFrIjnPFOckLU';
+const API_KEY = '';
 // DOM element for video display grid
 const videoGrid = document.getElementById('video-grid');
 

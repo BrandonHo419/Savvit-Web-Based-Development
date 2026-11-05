@@ -28,7 +28,7 @@ These capabilities are represented in the source code, but **not all of them cur
 | Integrations | YouTube Data API, Pixabay API (experimental) |
 | Tooling | npm, ESLint, HTML validation |
 
-The backend currently mixes two MySQL drivers. Unifying database access is part of the redevelopment.
+The active backend uses mysql2 through separate callback and promise connection pools. The older mysql dependency remains declared; consolidating database access is future work.
 
 ## Project structure
 
@@ -50,60 +50,76 @@ The backend currently mixes two MySQL drivers. Unifying database access is part 
 └── package.json           # Declared Node dependencies and scripts
 ```
 
-## Local development (work in progress)
+## Local development
 
-**Prerequisites:** a current Node.js LTS release, npm, and MySQL 8.
+Use Node.js 24, npm, and MySQL 8. The smoke tests require Node.js 18 or later.
 
-1. Clone the repository and install the currently declared dependencies:
-
-   ```bash
-   git clone https://github.com/BrandonHo419/Savvit-Web-Based-Development.git
-   cd Savvit-Web-Based-Development
-   npm install
-   ```
-
-2. Create a local database and import the existing development SQL dump:
+1. Clone this repository and run `npm ci` to install the locked dependencies.
+2. Copy `.env.example` to `.env` (`Copy-Item .env.example .env` in PowerShell).
+3. Set `DB_USER`, `DB_PASSWORD`, and `DB_NAME` for your local MySQL account.
+   Generate a session secret with the command below and put its output in
+   `SESSION_SECRET`. Keep `.env` private.
 
    ```bash
-   mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS pinterest_clone;"
-   mysql -u root -p pinterest_clone < database.sql
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
    ```
 
-3. Create a local `.env` file (do not commit it):
+4. Import the development dump into a new, disposable database. **The dump
+   contains DROP TABLE statements and replaces existing tables and data.**
+   In the MySQL client, run the following, adapting the file path:
 
-   ```dotenv
-   PORT=3000
-   NODE_ENV=development
-   SESSION_SECRET=replace-with-a-long-random-secret
+   ```sql
+   CREATE DATABASE pinterest_clone;
+   USE pinterest_clone;
+   SOURCE C:/path/to/Savvit-Web-Based-Development/database.sql;
    ```
 
-4. After the dependency and routing fixes in the roadmap have been completed, start the server:
+   If that database already exists, choose a new database name and update
+   `DB_NAME` rather than importing over data you want to keep. Development
+   records in the dump are not a documented demo account.
 
-   ```bash
-   npm start
-   ```
+5. Run `npm start` and open `http://localhost:3000/landingpage.html`.
+   In PowerShell, use `npm.cmd ci`, `npm.cmd test`, and `npm.cmd start` if
+   execution policy blocks the npm PowerShell wrapper.
 
-   The intended local landing page is `http://localhost:3000/landingpage.html`.
+The active board and pin routers are mounted and database settings are read
+from the environment. The unused `routes/index.js` is not mounted and imports
+packages outside the current manifest; it is not part of this startup path.
+External discovery is optional and may fail while provider keys are unavailable.
+Do not put replacement credentials in public JavaScript. Backend provider-key
+configuration has not yet been implemented.
 
-**Important:** these are initial setup instructions, **not a verified working quickstart**. Several packages imported by the source are missing from `package.json`; the pin and board routers are not mounted in `app.js`; and other configuration and page references still need repair. The imported SQL includes development records, not a ready-to-use demo account.
+### Baseline checks
+
+```bash
+npm test
+```
+
+The tests use Node's built-in runner and an ephemeral local HTTP port. They
+check the landing page, root redirect, rejection of anonymous API reads, and
+rejection of a mutation without a CSRF token. They do not use your `.env` or
+connect to MySQL. They do **not** verify login, database queries, account
+isolation, uploads, or browser interactions. Those require subsequent integration
+and browser tests against an isolated database.
 
 ## Current limitations
 
 - **Application wiring:** some routes, UI references, and asset paths are incomplete or inconsistent.
-- **Configuration:** database connections are hardcoded in multiple modules; the package manifest is incomplete.
+- **Configuration:** active database settings use environment variables, but connection pools are duplicated and unused legacy routing code remains.
 - **Authentication and authorization:** resource ownership and role checks need to be enforced consistently on the server, with user identity derived from the session.
-- **API credentials:** experimental frontend integrations require credential rotation and secure server-side handling before public deployment.
+- **API credentials:** revoked legacy values must be removed wherever they remain; replacement credentials require secure server-side handling before public deployment.
 - **File uploads:** uploaded images need validation, sensible size limits, and durable storage.
-- **Testing and deployment:** there is no verified automated test suite, reproducible container setup, or hosted public demo yet.
+- **Testing and deployment:** basic HTTP smoke checks exist; database, authorization and browser coverage, a reproducible container setup, and a hosted public demo are still pending.
 
 **Do not expose this version as a public multi-user service until the security and deployment blockers are addressed.**
 
 ## Roadmap
 
 ### Phase 1 — Make the foundation reproducible
-- [ ] Fix missing npm dependencies and remove unused imports
-- [ ] Consolidate MySQL configuration and move settings into environment variables
-- [ ] Mount the board and pin routes; repair missing HTML and asset references
+- [ ] Remove unused legacy imports and dependencies after verification
+- [ ] Consolidate the environment-configured MySQL connection pools
+- [x] Mount the board and pin routes
+- [ ] Repair missing HTML and asset references
 - [ ] Provide a clean schema, development seed data, and a working demo account
 - [ ] Add documented setup commands and a local Docker Compose environment
 
