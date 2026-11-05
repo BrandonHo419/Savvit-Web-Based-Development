@@ -1,7 +1,7 @@
 {
   "scripts": {
     "start": "node ./bin/www",
-    "test": "node --test tests/smoke.test.js"
+    "test": "node --test"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

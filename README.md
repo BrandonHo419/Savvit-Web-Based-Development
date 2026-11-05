@@ -95,21 +95,92 @@ configuration has not yet been implemented.
 npm test
 ```
 
-The tests use Node's built-in runner and an ephemeral local HTTP port. They
-check the landing page, root redirect, rejection of anonymous API reads, and
-rejection of a mutation without a CSRF token. They do not use your `.env` or
-connect to MySQL. They do **not** verify login, database queries, account
-isolation, uploads, or browser interactions. Those require subsequent integration
-and browser tests against an isolated database.
+The tests use Node's built-in runner and ephemeral local HTTP ports. Smoke
+checks cover the landing page, redirects, anonymous API rejection and CSRF.
+Authorization tests use real Express routes, Passport login and session cookies
+with two ordinary accounts and an administrator, backed by a deterministic
+database substitute. They cover forged identities, private reads, writes to
+another account's resources, admin permissions, replies, uploads and encoded
+upload URLs. Frontend helper tests check session loading and CSRF headers.
+
+These tests do not read your `.env` or connect to MySQL. The authorization suite
+creates and removes temporary upload fixtures. Expected database-failure tests
+may print simulated errors; use the final pass/fail summary. SQL execution,
+real-database integrity and browser interactions still need integration checks.
+
+### Current access rules
+
+- Board and pin APIs still require login; anonymous public browsing is pending.
+- New boards are private. Existing board visibility is unchanged.
+- Owners can read their private boards; other authenticated users can read only
+  public boards. Semi-private invitations are not implemented yet.
+- A pin inherits access from its original board (`pins.board_id`). A pin with
+  no valid original board is inaccessible until its data is repaired.
+- Creating pins and saving references require ownership of the destination.
+  Moving or deleting originals requires ownership of both the pin and its
+  original board. Public visibility never grants editing rights.
+- Client-supplied identity fields are ignored for content mutations. User IDs
+  in listing URLs select whose boards to list; visibility is still checked
+  against the authenticated session. Admin deletion IDs identify the target,
+  and the administrator's role is checked separately.
+- `/users/profile` supplies the signed-in `user_id` and CSRF token. Frontend
+  board initialization waits for that profile; mutations send its CSRF token.
+- `/users/user_info`, `/users/admin_add_user` and `/users/admin_del_user` require
+  an administrator role on the server.
+- Direct local upload requests require login and access through a pin's original
+  board. Private responses use `Cache-Control: private, no-store`. Provider
+  imports require HTTP(S) image URLs and cannot claim local upload paths.
+
+### Local database verification still required
+
+Use a disposable database and two separate browser profiles to avoid sharing
+session cookies. Register accounts A and B, create a board as each, and verify
+that each account sees its own new private board. As B, try requesting A's
+board/pin IDs: private resources should return 404, while unauthenticated API
+requests return 401. Confirm ordinary accounts receive 403 from user-info and
+admin operations. Test a normal owner action after each rejection.
+
+Board creation sends the CSRF header. Home now exposes Create Board and links
+collections to `board.html?board_id=...`; pin details load `view_modal.html`.
+The detail Save control adds a `board_pins` reference without moving the original.
+Board contents, counts and thumbnail selection include originals and accessible
+references without duplicates. Unavailable references are omitted, including
+from counts and thumbnails. Saving membership and its engagement is transactional;
+repeat saves do not add duplicate engagement records.
+
+The new `GET /boards/:board_id` endpoint returns accessible board metadata and an
+`is_owner` flag; the server still enforces all permissions independently of the UI.
+No schema migration or backfill is needed: existing originals continue to appear
+through `pins.board_id`. Renaming/deleting boards, visibility controls, semi-private
+invitations and removing individual saved references remain pending.
+
+Manual workflow check:
+
+1. Log in, open Home, create board A, and confirm navigation to its board page.
+2. Add an image pin with a title and HTTP(S) destination URL; reload to check persistence.
+3. Create board B, return to A, open the pin and save it to B.
+4. Open B and confirm the same pin appears; A must still contain the original.
+5. Save it to B again: B should show one copy and its count should not increase.
+6. In a second browser profile, log in as another account. The new private boards
+   and their pins must remain inaccessible. Existing public originals may be read
+   and saved, but cannot be moved or deleted by that account.
+7. Enter literal HTML-like text in a board name, pin title or comment. It should
+   display as text, not create HTML elements or execute scripts.
+
+Browser layout and real MySQL execution have not yet been verified in this
+workspace. The automated authorization tests use a controlled database substitute;
+they check membership, privacy changes, duplicate saves and rollback behaviour.
+Upload validation, safe HTML rendering, transactions, persistent sessions and
+full input validation also remain required before public deployment.
 
 ## Current limitations
 
 - **Application wiring:** some routes, UI references, and asset paths are incomplete or inconsistent.
 - **Configuration:** active database settings use environment variables, but connection pools are duplicated and unused legacy routing code remains.
-- **Authentication and authorization:** resource ownership and role checks need to be enforced consistently on the server, with user identity derived from the session.
+- **Authentication and authorization:** session-derived identity, ownership and admin checks are implemented for active routes; semi-private sharing and real-database/browser verification are pending.
 - **API credentials:** revoked legacy values must be removed wherever they remain; replacement credentials require secure server-side handling before public deployment.
 - **File uploads:** uploaded images need validation, sensible size limits, and durable storage.
-- **Testing and deployment:** basic HTTP smoke checks exist; database, authorization and browser coverage, a reproducible container setup, and a hosted public demo are still pending.
+- **Testing and deployment:** smoke and database-substituted authorization tests exist; real-database and browser coverage, reproducible containers, and a hosted demo remain pending.
 
 **Do not expose this version as a public multi-user service until the security and deployment blockers are addressed.**
 
@@ -119,12 +190,13 @@ and browser tests against an isolated database.
 - [ ] Remove unused legacy imports and dependencies after verification
 - [ ] Consolidate the environment-configured MySQL connection pools
 - [x] Mount the board and pin routes
-- [ ] Repair missing HTML and asset references
+- [x] Add board and pin-detail pages
+- [ ] Audit remaining legacy HTML and asset references
 - [ ] Provide a clean schema, development seed data, and a working demo account
 - [ ] Add documented setup commands and a local Docker Compose environment
 
 ### Phase 2 — Secure and stabilise
-- [ ] Derive user identity from authenticated sessions, never from client-supplied IDs
+- [x] Derive user identity from authenticated sessions, never from client-supplied IDs
 - [ ] Enforce ownership, admin permissions, input validation, and safe upload handling
 - [ ] Move third-party API calls requiring secrets to backend endpoints
 - [ ] Use an appropriate production session store, cookie settings, and security middleware

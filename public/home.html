@@ -48,7 +48,6 @@
         <select id="board_select">
           <option value="" disabled selected>Select Board</option>
         </select>
-        <button id="create_board_btn" type="button">+ Create Board</button>
       </div>
 
       <div class="create_board_modal" style="display: none;">
@@ -78,6 +77,8 @@
       <div class="section" id="collections-section">
         <div class="collection-container"></div>
         <h3>Your Collections</h3>
+        <button id="create_board_btn" type="button">+ Create Board</button>
+        <p id="collections-status" role="status"></p>
         <div class="collections-grid" id="collections-grid"></div>
       </div>
 
@@ -109,7 +110,7 @@
           </div>
         </div>
         <div class="section3">
-          <div class="upload_link">Paste Link</div>
+          <div class="upload_link">Paste destination URL</div>
         </div>
       </div>
 
@@ -137,7 +138,7 @@
 
   <div id="uploadLinkPopup" class="upload-link-popup" style="display: none;">
     <input type="text" id="uploadLinkInput" placeholder="Paste image or page link here..." />
-    <button type="button" id="confirmUploadLink">Preview</button>
+    <button type="button" id="confirmUploadLink">Use URL</button>
     <button type="button" id="closeUploadPopup" class="close-popup-btn">&times;</button>
   </div>
 

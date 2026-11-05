@@ -1,3 +1,4 @@
+import { apiFetch } from '../api.js';
 import { loadPinsForBoard } from './board.js';
 import { state } from './state.js';
 
@@ -8,10 +9,8 @@ import { state } from './state.js';
  */
 export async function deletePin(pinId, onSuccess) {
   try {
-    const res = await fetch(`/pins/${pinId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: state.userId })
+    const res = await apiFetch(`/pins/${pinId}`, {
+      method: 'DELETE'
     });
 
     let responseBody;
@@ -46,7 +45,7 @@ export async function deleteBoard(boardId, onSuccess = null) {
   if (!confirm('Are you sure you want to delete this board? All its pins will be lost.')) return;
 
   try {
-    const res = await fetch(`/boards/${boardId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/boards/${boardId}`, { method: 'DELETE' });
 
     if (!res.ok) {
       const errorText = await res.text();

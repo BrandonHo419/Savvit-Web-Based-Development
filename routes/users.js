@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const crypto = require('crypto');
+const { requireAdmin, validId } = require('../middleware/authorization');
 
 // Reusable user creation function
 async function createUser(req, res, { autoLogin = false }) {
@@ -106,7 +107,10 @@ router.get('/profile', (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).send('Not Logged In');
   }
+  res.set('Cache-Control', 'private, no-store');
   res.status(200).json({
+    user_id: req.user.user_id,
+    csrfToken: req.session.csrfToken,
     username: req.user.username,
     email: req.user.email,
     role: req.user.role
@@ -114,7 +118,7 @@ router.get('/profile', (req, res) => {
 });
 
 /* Retrieve all user_info details */
-router.get('/user_info', (req, res) => {
+router.get('/user_info', requireAdmin, (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).send('Not Logged In');
   }
@@ -139,17 +143,18 @@ router.get('/user_info', (req, res) => {
 });
 
 /* Add user from admin interface */
-router.post('/admin_add_user', async (req, res) => {
+router.post('/admin_add_user', requireAdmin, async (req, res) => {
   await createUser(req, res, { autoLogin: false });
 });
 
 /* Delete user by ID */
-router.post('/admin_del_user', (req, res) => {
+router.post('/admin_del_user', requireAdmin, (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).send('Not Logged In');
   }
 
-  const userID = parseInt(req.body.user_id, 10);
+  if (!validId(req.body?.user_id)) return res.status(400).send('Invalid user_id');
+  const userID = Number(req.body.user_id);
   const currentUserID = Number(req.user.user_id);
 
   if (!req.user || req.user.role !== 'admin') {

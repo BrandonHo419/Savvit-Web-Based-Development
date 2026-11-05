@@ -1,3 +1,5 @@
+import { safeHttpUrl } from '../content.js';
+import { apiFetch } from '../api.js';
 
 import { loadPinsForBoard } from './board.js';
 import { state } from './state.js';
@@ -18,9 +20,12 @@ function openPinModal(pin) {
   const shareBtn = modal.querySelector('#shareButton');
   const deleteIcon = modal.querySelector('.action-btn .fa-trash')?.parentElement;
 
-  modalImage.src = pin.img_blob || '/images/fallback.jpg';
+  modalImage.src = safeHttpUrl(pin.img_blob) || '/img/create.jpg';
+  modalImage.alt = pin.title || 'Saved image';
+  modal.querySelector('.pin_title').textContent = pin.title || 'Untitled pin';
   document.body.style.overflow = 'hidden';
   modal.style.display = 'flex';
+  modal.focus();
   // Description
   const maxDescriptionLength = 300;
   const fullDescription = pin.description || 'No description';
@@ -42,17 +47,18 @@ function openPinModal(pin) {
   // Handle board selection
   const boardSelect = document.querySelector('#boardSelect');
   if (boardSelect) {
-    boardSelect.value = pin.board_id || '';
+    boardSelect.value = state.activeBoardId || '';
     if (!boardSelect.value) boardSelect.selectedIndex = 0;
-    state.activeBoardId = pin.board_id || null;
+
   }
 
   // Trash icon visibility
   if (deleteIcon) {
-    if (state.fromCollections || !pin.board_id) {
+    if (Number(pin.user_id) !== Number(state.userId) || !pin.board_id) {
       deleteIcon.style.display = 'none';
     } else {
       const newDeleteIcon = deleteIcon.cloneNode(true);
+      newDeleteIcon.style.display = 'flex';
       deleteIcon.replaceWith(newDeleteIcon);
 
       newDeleteIcon.addEventListener('click', () => {
@@ -68,11 +74,14 @@ function openPinModal(pin) {
       // Open modal
 
   // Read-only check
- const isReadOnly = state.fromCollections || pin.board_id == null;
+ const isReadOnly = pin.board_id == null;
   // Set destination URL (required for save later)
   const pinLink = modal.querySelector('.pin_link');
   if (pinLink) {
-    pinLink.href = pin.destination || '';
+    const url = safeHttpUrl(pin.destination);
+    pinLink.hidden = !url;
+    if (url) pinLink.href = url;
+    else pinLink.removeAttribute('href');
   }
   modal.dataset.destination = pin.destination || '';
 
@@ -107,14 +116,20 @@ export function handlePinClick(pin) {
   const existingModal = document.getElementById('viewModal');
 
   if (!existingModal) {
-    fetch('/view_modal.html')
-      .then(res => res.text())
+    apiFetch('/view_modal.html')
+      .then(res => {
+        if (!res.ok) throw new Error('Pin details are unavailable');
+        return res.text();
+      })
       .then(html => {
         const modalContainer = document.getElementById('modalContainer');
-        modalContainer.innerHTML = html; // replace safely
+        modalContainer.innerHTML = html; // Only the static, same-origin modal template is inserted.
         initializeModalEvents();
         openPinModal(pin);
-        loadComments(pin.id);
+      })
+      .catch(error => {
+        console.error('Unable to open pin:', error);
+        alert('Unable to open this pin. Please reload and try again.');
       });
   } else {
     openPinModal(pin);
@@ -128,7 +143,7 @@ function initializeModalEvents() {
 
   const boardSelect = modal.querySelector('#boardSelect');
 
-  fetch(`/boards/users/${state.userId}/boards`)
+  apiFetch(`/boards/users/${state.userId}/boards`)
     .then(res => res.json())
     .then(boards => {
       boardSelect.innerHTML = '<option value="" disabled>Select Board</option>';
@@ -148,19 +163,24 @@ function initializeModalEvents() {
     })
     .catch(err => console.error('Failed to populate modal boardSelect:', err));
 
-  boardSelect?.addEventListener('change', (e) => {
-    const newBoardId = e.target.value;
-    state.activeBoardId = newBoardId;
-    document.getElementById('board_select').value = newBoardId;
-    loadPinsForBoard(newBoardId);
-  });
 
-  modal.querySelector(".close-btn")?.addEventListener("click", () => {
+  const closeModal = () => {
     modal.style.display = "none";
     document.body.style.overflow = '';
     state.fromCollections = false;
     if (state.activeBoardId) {
       loadPinsForBoard(state.activeBoardId);
+    }
+  };
+  modal.querySelector('.close-btn')?.addEventListener('click', closeModal);
+  modal.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeModal();
+    if (event.key === 'Tab') {
+      const controls = [...modal.querySelectorAll('button, select, input, a[href]')].filter(el => el.getClientRects().length && !el.disabled);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === modal)) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
   });
 
@@ -210,11 +230,10 @@ function initializeModalEvents() {
         description: modal.querySelector('.description')?.textContent || '',
         destination: `https://www.youtube.com/watch?v=${pinId.replace('yt_', '')}`,
         img_blob: modalImg?.src || '',
-        user_id: state.userId,
         board_id: boardId
       };
 
-      const createRes = await fetch('/pins/youtube', {
+      const createRes = await apiFetch('/pins/youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pinData)
@@ -238,11 +257,10 @@ function initializeModalEvents() {
         destination:
           modal.querySelector('.pin_link')?.href || modal.dataset.destination || '',
         img_blob: modalImg?.src || '',
-        user_id: state.userId,
         board_id: boardId
       };
 
-      const createRes = await fetch('/pins/pixabay', {
+      const createRes = await apiFetch('/pins/pixabay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pinData)
@@ -258,8 +276,8 @@ function initializeModalEvents() {
       realPinId = createResult.pin_id;
     }
 
-    const res = await fetch(`/pins/${realPinId}/move`, {
-      method: 'PUT',
+    const res = await apiFetch(`/pins/${realPinId}/save`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ board_id: boardId })
     });
@@ -271,7 +289,7 @@ function initializeModalEvents() {
       document.body.style.overflow = '';
       loadPinsForBoard(state.activeBoardId);
     } else {
-      throw new Error(result.error || "Failed to move pin.");
+      throw new Error(result.error || "Failed to save pin.");
     }
 
   } catch (err) {
@@ -299,10 +317,10 @@ function initializeModalEvents() {
     if (!text || !pinId) return;
 
     try {
-      const res = await fetch(`/pins/${pinId}/comments`, {
+      const res = await apiFetch(`/pins/${pinId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text, user_id: state.userId })
+        body: JSON.stringify({ content: text })
       });
 
       if (res.ok) {
@@ -359,10 +377,10 @@ function setupLikeButton(pin) {
     count = optimisticCount;
 
     try {
-      const res = await fetch(`/pins/${pinId}/like`, {
+      const res = await apiFetch(`/pins/${pinId}/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: state.userId, like: optimisticLiked })
+        body: JSON.stringify({ like: optimisticLiked })
       });
 
       if (!res.ok) throw new Error('Server rejected like toggle');

@@ -49,6 +49,14 @@ test('landing page is served as HTML', async () => {
     assert.match(await response.text(), /Savvit/i);
 });
 
+for (const path of ['/board.html', '/view_modal.html']) {
+    test(`${path} is served as HTML`, async () => {
+        const response = await fetch(`${baseUrl}${path}`);
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('content-type'), /text\/html/);
+    });
+}
+
 for (const path of ['/users/profile', '/boards/users/1/boards', '/pins']) {
     test(`anonymous GET ${path} is rejected before database access`, async () => {
         const response = await fetch(`${baseUrl}${path}`);

@@ -426,3 +426,12 @@
 #modalContainer {
   all: unset; /* or remove any styles */
 }
+/* Detail text must not inherit hidden card-title styling. */
+#viewModal .pin_title { display: block; position: static; width: auto; height: auto; opacity: 1; color: white; }
+#viewModal .description { position: relative; overflow: auto; }
+#viewModal .description::after { display: none; }
+#viewModal .pin_link { color: var(--primary-color); margin-bottom: 16px; }
+#viewModal .left-panel { position: relative; }
+#viewModal .reply { color: var(--text-light); }
+#viewModal .save-section { margin: 20px 0 8px; }
+#viewModal .close-btn { background: var(--bg-dark); border: 1px solid var(--primary-color); }

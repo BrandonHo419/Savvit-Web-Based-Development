@@ -200,3 +200,21 @@
   color: #999;
   cursor: pointer;
 }
+/* Keep the board workflow usable without changing the legacy discovery page. */
+body[data-page="board"] { padding: 16px; }
+[data-page="board"] .home_navigation_bar { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+[data-page="board"] .pin_container { column-count: auto; column-width: 220px; }
+[data-page="board"] .add_pin_modal { position: fixed; inset: 0; transform: none; }
+[data-page="board"] .add_pin_container { max-width: calc(100vw - 32px); max-height: 90vh; overflow-y: auto; }
+[data-page="board"] #board-status { margin: 16px 0; }
+[data-page="board"] .home_navigation_bar button,
+[data-page="board"] #create_board_btn { padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+[data-page="board"] .create_board_modal { color: #172c28; }
+@media (max-width: 600px) {
+  [data-page="board"] .header { align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  [data-page="board"] .nav { gap: 12px; flex-wrap: wrap; }
+  [data-page="board"] .add_pin_container { flex-direction: column; height: 90vh; padding: 12px; }
+  [data-page="board"] .side { width: 100%; height: auto; }
+  [data-page="board"] #left_side .section2 { height: 240px; }
+  [data-page="board"] #right_side .section2 { height: auto; }
+}

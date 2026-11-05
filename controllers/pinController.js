@@ -1,16 +1,26 @@
 const pool = require('../models/db');
+
+function isRemoteImageUrl(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
 // POST /pins — Create a new pin
 exports.createPin = async (req, res) => {
   const {
     title = '',
     description = '',
     link_url = '',
-    user_id,
-    visibility = 'public',
     board_id
   } = req.body;
+  const user_id = req.user.user_id;
+  const visibility = req.accessBoard.visibility;
 
-  if (!title.trim() || !link_url.trim()) {
+  if (typeof title !== 'string' || typeof link_url !== 'string' || !title.trim() || !link_url.trim()) {
     return res.status(400).json({ error: 'Title and link URL are required.' });
   }
 
@@ -45,7 +55,10 @@ exports.getAllPins = async (req, res) => {
       `SELECT p.*, u.username
        FROM pins p
        JOIN users u ON p.user_id = u.user_id
-       ORDER BY p.created_at DESC`
+       JOIN boards b ON b.board_id = p.board_id
+       WHERE b.user_id = ? OR b.visibility = 'public'
+       ORDER BY p.created_at DESC`,
+       [req.user.user_id]
     );
     res.json(pins);
   } catch (err) {
@@ -77,7 +90,7 @@ exports.getPinById = async (req, res) => {
 
 // POST /pins/:id/like — Like/unlike a pin
 exports.toggleLike = async (req, res) => {
-  const { user_id } = req.body;
+  const user_id = req.user.user_id;
   const { id: pin_id } = req.params;
 
   try {
@@ -120,21 +133,33 @@ exports.saveToBoard = async (req, res) => {
   const { board_id } = req.body;
   const { id: pin_id } = req.params;
 
+  let connection;
   try {
-    await pool.query(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [result] = await connection.query(
       `INSERT IGNORE INTO board_pins (board_id, pin_id) VALUES (?, ?)`,
       [board_id, pin_id]
     );
 
-    await pool.query(
-      `INSERT INTO engagements (user_id, pin_id, type)
-       SELECT user_id, ?, 'save' FROM boards WHERE board_id = ?`,
-      [pin_id, board_id]
-    );
-
+    // Repeat saves are idempotent and do not duplicate engagement records.
+    if (result.affectedRows > 0) {
+      await connection.query(
+        `INSERT INTO engagements (user_id, pin_id, type) VALUES (?, ?, 'save')`,
+        [req.user.user_id, pin_id]
+      );
+    }
+    await connection.commit();
     res.status(200).json({ message: 'Pin saved to board' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to save pin', details: err });
+    if (connection) {
+      try { await connection.rollback(); }
+      catch (rollbackError) { console.error('Save rollback failed:', rollbackError); }
+    }
+    console.error('Failed to save pin:', err);
+    res.status(500).json({ error: 'Failed to save pin' });
+  } finally {
+    if (connection) connection.release();
   }
 };
 
@@ -148,8 +173,8 @@ exports.movePinToBoard = async (req, res) => {
 
   try {
     const [result] = await pool.query(
-      `UPDATE pins SET board_id = ? WHERE pin_id = ?`,
-      [board_id, pin_id]
+      `UPDATE pins SET board_id = ? WHERE pin_id = ? AND user_id = ?`,
+      [board_id, pin_id, req.user.user_id]
     );
 
     if (result.affectedRows === 0) {
@@ -164,10 +189,11 @@ exports.movePinToBoard = async (req, res) => {
 };
 
 exports.addComment = async (req, res) => {
-  const { user_id, content } = req.body;
+  const { content } = req.body || {};
+  const user_id = req.user.user_id;
   const { pin_id } = req.params;
 
-  if (!content) return res.status(400).json({ error: 'Comment cannot be empty.' });
+  if (typeof content !== 'string' || !content.trim()) return res.status(400).json({ error: 'Comment cannot be empty.' });
 
   try {
     const [result] = await pool.query(
@@ -183,10 +209,11 @@ exports.addComment = async (req, res) => {
 
 
 exports.addReply = async (req, res) => {
-  const { user_id, content, parent_reply_id = null } = req.body;
+  const { content, parent_reply_id = null } = req.body || {};
+  const user_id = req.user.user_id;
   const { comment_id } = req.params;
 
-  if (!content) return res.status(400).json({ error: 'Reply cannot be empty.' });
+  if (typeof content !== 'string' || !content.trim()) return res.status(400).json({ error: 'Reply cannot be empty.' });
 
   try {
     const [result] = await pool.query(
@@ -246,7 +273,13 @@ exports.getCommentsWithReplies = async (req, res) => {
 
 // POST /pins/youtube — Create a YouTube pin
 exports.createYouTubePin = async (req, res) => {
-  const { id, title, description, destination, img_blob, user_id, board_id } = req.body;
+  const { id, title, description, destination, img_blob, board_id } = req.body;
+  const user_id = req.user.user_id;
+
+  // Imported content must not claim ownership of another user's local upload.
+  if (!isRemoteImageUrl(img_blob)) {
+    return res.status(400).json({ error: 'Imported images require an HTTP(S) URL' });
+  }
 
   // Validate required fields
   if (!title || !destination || !img_blob || !user_id || !board_id) {
@@ -269,7 +302,12 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 
 // POST /pins/pixabay — Create a Pixabay pin
 exports.createPixabayPin = async (req, res) => {
-  const { id, title, description, destination, img_blob, user_id, board_id } = req.body;
+  const { id, title, description, destination, img_blob, board_id } = req.body;
+  const user_id = req.user.user_id;
+
+  if (!isRemoteImageUrl(img_blob)) {
+    return res.status(400).json({ error: 'Imported images require an HTTP(S) URL' });
+  }
 
   // Validate required fields
   if (!title || !destination || !img_blob || !user_id || !board_id) {
@@ -293,7 +331,7 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 // DELETE /pins/:id — Delete a pin
 exports.deletePin = async (req, res) => {
   const { id } = req.params;
-  const { user_id } = req.body;
+  const user_id = req.user.user_id;
 
   if (!user_id) return res.status(400).json({ error: 'Missing user ID' });
 

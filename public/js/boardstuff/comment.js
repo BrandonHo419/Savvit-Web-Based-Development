@@ -1,77 +1,54 @@
+import { apiFetch } from '../api.js';
 //COMMENT LOADING & REPLY LOGIC
 
 // --- COMMENT HANDLING ---
 // Load Comments for a Pin
-import { state } from './state.js';
-import { generateAvatarFallback } from './userProfile.js';
+
+function renderComment(entry, className) {
+  const container = document.createElement('div');
+  container.className = className;
+  const author = document.createElement('strong');
+  author.textContent = entry.user_username || `User${entry.user_id}`;
+  const time = document.createElement('span');
+  time.className = 'timestamp';
+  time.textContent = new Date(entry.created_at).toLocaleString();
+  const content = document.createElement('p');
+  content.className = `${className}-text`;
+  content.textContent = entry.content;
+  container.append(author, time, content);
+  return container;
+}
 
 export async function loadComments(pinId) {
+  const commentList = document.getElementById('comment-list');
+  const commentCount = document.getElementById('comment-count');
+  commentList.replaceChildren();
+  commentCount.textContent = '0';
   try {
-    const res = await fetch(`/pins/${pinId}/comments`);
+    const res = await apiFetch(`/pins/${pinId}/comments`);
+    if (!res.ok) throw new Error('Unable to load comments');
     const comments = await res.json();
-
-    // get comment list and count elements
-    const commentList = document.getElementById('comment-list');
-    const commentCount = document.getElementById('comment-count');
-    commentList.innerHTML = '';
-
-    //
+    if (String(document.getElementById('viewModal').dataset.pinId) !== String(pinId)) return;
     comments.forEach(comment => {
-      const username = comment.user_username || `User${comment.user_id}`;
-      const displayName = comment.display_name || username;
-      const avatarUrl = comment.user_avatar_url;
-
-      const commentEl = document.createElement('div');
-      commentEl.className = 'comment';
+      const commentEl = renderComment(comment, 'comment');
       commentEl.dataset.commentId = comment.comment_id;
-
-      const avatarHTML = avatarUrl
-        ? `<img src="${avatarUrl}" class="small-avatar" alt="${displayName}'s avatar">`
-        : `<div class="small-avatar avatar-fallback">${generateAvatarFallback(displayName)}</div>`;
-
-      const repliesHTML = comment.replies.map(reply => {
-        const replyUsername = reply.user_username || `User${reply.user_id}`;
-        const replyName = reply.display_name || replyUsername;
-        const replyAvatar = reply.user_avatar_url;
-
-        const replyAvatarHTML = replyAvatar
-          ? `<img src="${replyAvatar}" class="small-avatar" alt="${replyName}'s avatar">`
-          : `<div class="small-avatar avatar-fallback">${generateAvatarFallback(replyName)}</div>`;
-
-        return `
-          <div class="reply">
-            <div class="user-profile">
-              <a href="/users/${reply.user_id}" class="reply-user-link">
-                ${replyAvatarHTML}
-                <strong>${replyName}</strong>
-              </a>
-              <span class="timestamp">${new Date(reply.created_at).toLocaleString()}</span>
-            </div>
-            <div class="reply-text">${reply.content}</div>
-          </div>
-        `;
-      }).join('');
-
-      commentEl.innerHTML = `
-        <div class="user-profile">
-          <a href="/users/${comment.user_id}" class="comment-user-link">
-            ${avatarHTML}
-            <strong>${displayName}</strong>
-          </a>
-          <span class="timestamp">${new Date(comment.created_at).toLocaleString()}</span>
-        </div>
-        <div class="comment-text">${comment.content}</div>
-        <div class="replies">${repliesHTML}</div>
-        <button class="reply-btn">Reply</button>
-      `;
-
+      const replies = document.createElement('div');
+      replies.className = 'replies';
+      (comment.replies || []).forEach(reply => replies.appendChild(renderComment(reply, 'reply')));
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'reply-btn';
+      button.textContent = 'Reply';
+      commentEl.append(replies, button);
       commentList.appendChild(commentEl);
-      attachReplyHandler(commentEl.querySelector('.reply-btn'));
+      attachReplyHandler(button);
     });
-
     commentCount.textContent = comments.length;
   } catch (err) {
-    console.error("Failed to load comments:", err);
+    console.error('Failed to load comments:', err);
+    if (String(document.getElementById('viewModal').dataset.pinId) === String(pinId)) {
+      commentList.textContent = 'Unable to load comments.';
+    }
   }
 }
 // -- Attach Reply Box to a Comment---------------------
@@ -98,10 +75,10 @@ export function attachReplyHandler(btn) {
       if (!replyText || !commentId) return;
 
       try {
-        const res = await fetch(`/pins/comments/${commentId}/replies`, {
+        const res = await apiFetch(`/pins/comments/${commentId}/replies`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: replyText, user_id: state.userId })
+          body: JSON.stringify({ content: replyText })
         });
 
         if (res.ok) {

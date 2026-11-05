@@ -12,6 +12,7 @@ const createPassport = require('./passportStruct');
 const pinsRouter = require('./routes/pins');
 const boardsRouter = require('./routes/boards');
 const usersRouter = require('./routes/users');
+const { uploadAccess } = require('./middleware/authorization');
 
 
 
@@ -89,6 +90,19 @@ app.use(validateToken);
 app.use(passport.initialize());
 app.use(passport.session());
 
+app.use((req, res, next) => {
+    let pathname;
+    try {
+        // Static serving decodes URLs; its access check must do the same.
+        pathname = path.posix.normalize(decodeURIComponent(req.path).replace(/\\/g, '/')).toLowerCase();
+    } catch {
+        return res.status(400).json({ error: 'Invalid path' });
+    }
+    if (pathname === '/uploads' || pathname.startsWith('/uploads/')) {
+        return privateResponse(req, res, () => requireAuth(req, res, () => uploadAccess(req, res, next)));
+    }
+    next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/users', usersRouter);
@@ -102,8 +116,13 @@ function requireAuth(req, res, next) {
     next();
 }
 
-app.use('/pins', requireAuth, pinsRouter);
-app.use('/boards', requireAuth, boardsRouter);
+function privateResponse(req, res, next) {
+    res.set('Cache-Control', 'private, no-store');
+    next();
+}
+
+app.use('/pins', privateResponse, requireAuth, pinsRouter);
+app.use('/boards', privateResponse, requireAuth, boardsRouter);
 
 app.get('/', (req, res) => {
     res.redirect('/landingpage.html');

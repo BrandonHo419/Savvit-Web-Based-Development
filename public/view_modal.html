@@ -1,0 +1,39 @@
+<div id="viewModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+  <div class="modal-content-wrapper">
+    <button type="button" class="close-btn" aria-label="Close pin details">&times;</button>
+    <div class="left-panel">
+      <div class="image-container">
+        <img id="modalImage" class="modal-image" alt="">
+      </div>
+      <div class="left-actions">
+        <button type="button" id="likeButton" class="action-btn" aria-label="Toggle like">
+          <i class="far fa-heart" aria-hidden="true"></i><span id="likeCount">0</span>
+        </button>
+        <button type="button" class="action-btn" aria-label="Delete original pin">
+          <i class="fas fa-trash" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+    <div class="right-panel">
+      <h2 id="modal-title" class="pin_title"></h2>
+      <p class="description"></p>
+      <a class="pin_link" target="_blank" rel="noopener noreferrer">Open original link</a>
+      <div id="modalUserProfile" class="user-profile"></div>
+      <div class="save-section">
+        <label for="boardSelect">Save a reference to</label>
+        <select id="boardSelect"><option value="" disabled selected>Select a board</option></select>
+        <button type="button" class="save-btn">Save</button>
+      </div>
+      <p>Access to a saved pin follows its original board.</p>
+      <section id="comments-section" class="comment-section comments-section">
+        <h3>Comments (<span id="comment-count">0</span>)</h3>
+        <div id="comment-list" class="comment-list"></div>
+      </section>
+      <div class="add-comment">
+        <label for="commentInput">Comment</label>
+        <input id="commentInput" type="text" maxlength="2000">
+        <button id="postComment" type="button">Post</button>
+      </div>
+    </div>
+  </div>
+</div>
