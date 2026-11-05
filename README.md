@@ -268,3 +268,29 @@ Local verification:
    then reload as the second account: the reference must disappear and direct
    board/pin/upload requests must be denied. The owner retains access.
 5. Confirm an empty description can be saved and whitespace-only names cannot.
+
+### Public-board discovery (Stage 5)
+
+Use **Public boards** from Home or a board page to find public collections from
+all owners. Search matches board names as literal substrings (including `%` and
+`_`); case/accent matching follows your MySQL column collation. Results show
+names, descriptions and usernames, with 20 boards per page, newest first and
+board ID as the tie-breaker. They deliberately omit pin previews and counts so
+private original pins referenced by public boards cannot leak through discovery.
+
+`GET /boards/public?q=term&page=1` requires login and returns
+`{ boards, page, has_more }`. Search text is limited to 100 characters and pages
+to 1–10000. Invalid parameters return 400; database failures return a generic
+500. Private boards are excluded even for their owners. Publishing/unpublishing
+is reflected on the next search or reload. Offset pagination may shift when
+boards are created or change visibility between requests.
+
+Explore remains the existing external-content page. Anonymous discovery and
+semi-private invitations are not included. No schema change or new dependency
+is required. Tests use database and DOM substitutes, not real MySQL or browser
+rendering.
+
+Verify locally with two accounts: publish a board in account A; in account B,
+open Public boards, search its name, and open it. Owner settings must be absent.
+Make it private as A, then search again as B: it must disappear, and its direct
+URL must deny access. Search for an unmatched name to verify the empty state.

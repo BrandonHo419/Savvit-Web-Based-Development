@@ -41,6 +41,14 @@ let failUserLookup = false;
 async function query(sql, params = []) {
     const q = sql.replace(/\s+/g, ' ').trim();
     if (failLookup) throw new Error('Simulated database outage');
+    if (q.startsWith('SELECT b.board_id, b.name, b.description, u.username AS owner_name')) {
+        assert.match(q, /WHERE b.visibility = 'public' AND LOCATE\(\?, b.name\) > 0/);
+        assert.match(q, /ORDER BY b.created_at DESC, b.board_id DESC LIMIT \? OFFSET \?/);
+        assert.equal(params[1], 21);
+        return [boards.filter(b => b.visibility === 'public' && (b.name || '').includes(params[0]))
+            .sort((a, b) => b.board_id - a.board_id).slice(params[2], params[2] + params[1])
+            .map(b => ({ board_id: b.board_id, name: b.name, description: b.description, owner_name: `user${b.user_id}` }))];
+    }
     if (q.startsWith('UPDATE boards SET')) {
         if (failBoardUpdate) throw new Error('Simulated board update failure');
         assert.match(q, /WHERE board_id = \? AND user_id = \?$/);
@@ -499,4 +507,50 @@ test('failed board updates return a generic error without altering settings', as
         assert.deepEqual(await response.json(), { error: 'Failed to update board' });
         assert.deepEqual(boards[0], original);
     } finally { failBoardUpdate = false; }
+});
+
+
+test('public discovery lists public boards from all owners without private metadata', async () => {
+    const response = await request('/boards/public', { actor: bob });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('cache-control'), /no-store/);
+    const result = await response.json();
+    assert.deepEqual(result.boards.map(b => b.board_id), [21, 11]);
+    assert.equal(result.has_more, false);
+    assert.equal(result.page, 1);
+    assert.ok(result.boards.every(b => !('user_id' in b) && !('image_url' in b)));
+    assert.equal((await request('/boards/public')).status, 401);
+});
+
+test('discovery searches literal names, paginates, and removes newly private boards', async () => {
+    const original = boards.length;
+    try {
+        for (let i = 0; i < 25; i++) boards.push({ board_id: 1000 + i, user_id: 1, visibility: 'public', name: 'Find %_ board' });
+        boards.push({ board_id: 2000, user_id: 1, visibility: 'private', name: 'Find %_ board' });
+        const url = '/boards/public?q=' + encodeURIComponent('%_');
+        const first = await (await request(url, { actor: bob })).json();
+        const second = await (await request(url + '&page=2', { actor: bob })).json();
+        assert.equal(first.boards.length, 20);
+        assert.equal(first.has_more, true);
+        assert.equal(second.boards.length, 5);
+        assert.equal(second.has_more, false);
+        assert.equal(new Set([...first.boards, ...second.boards].map(b => b.board_id)).size, 25);
+        assert.equal((await request('/boards/1024', { actor: alice, method: 'PATCH', body: { visibility: 'private' } })).status, 200);
+        const updated = await (await request(url, { actor: bob })).json();
+        assert.ok(!updated.boards.some(b => b.board_id === 1024));
+        const empty = await (await request('/boards/public?q=unmatched', { actor: bob })).json();
+        assert.deepEqual(empty.boards, []);
+    } finally { boards.length = original; }
+});
+
+test('discovery rejects malformed queries and fails closed on database errors', async () => {
+    for (const suffix of ['page=0', 'page=-1', 'page=1.5', 'page=10001', 'page=1&page=2', 'q=a&q=b', 'q=' + 'a'.repeat(101)]) {
+        assert.equal((await request('/boards/public?' + suffix, { actor: alice })).status, 400);
+    }
+    try {
+        failLookup = true;
+        const response = await request('/boards/public', { actor: alice });
+        assert.equal(response.status, 500);
+        assert.deepEqual(await response.json(), { error: 'Unable to load public boards' });
+    } finally { failLookup = false; }
 });

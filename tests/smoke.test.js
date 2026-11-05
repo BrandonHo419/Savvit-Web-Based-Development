@@ -49,7 +49,7 @@ test('landing page is served as HTML', async () => {
     assert.match(await response.text(), /Savvit/i);
 });
 
-for (const path of ['/board.html', '/view_modal.html']) {
+for (const path of ['/board.html', '/view_modal.html', '/public-boards.html']) {
     test(`${path} is served as HTML`, async () => {
         const response = await fetch(`${baseUrl}${path}`);
         assert.equal(response.status, 200);
