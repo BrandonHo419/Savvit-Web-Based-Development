@@ -1,4 +1,6 @@
 const pool = require('../models/db');
+const boardWrite = require('../models/boardWrite');
+const { unlink } = require('node:fs/promises');
 
 function isRemoteImageUrl(value) {
   if (typeof value !== 'string') return false;
@@ -31,11 +33,16 @@ exports.createPin = async (req, res) => {
   const image_url = `/uploads/${req.file.filename}`;
 
   try {
-    const [result] = await pool.query(
+    const result = await boardWrite(board_id, req.user.user_id,
       `INSERT INTO pins (title, description, image_url, link_url, user_id, visibility, board_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [title, description, image_url, link_url, user_id, visibility, board_id]
     );
+
+    if (!result) {
+      await unlink(req.file.path);
+      return res.status(404).json({ error: 'Destination board not found' });
+    }
 
     res.status(201).json({
       message: 'Pin created',
@@ -172,10 +179,14 @@ exports.movePinToBoard = async (req, res) => {
   }
 
   try {
-    const [result] = await pool.query(
+    const result = await boardWrite(board_id, req.user.user_id,
       `UPDATE pins SET board_id = ? WHERE pin_id = ? AND user_id = ?`,
       [board_id, pin_id, req.user.user_id]
     );
+
+    if (!result) {
+      return res.status(404).json({ error: 'Destination board not found' });
+    }
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Pin not found' });
@@ -287,11 +298,15 @@ exports.createYouTubePin = async (req, res) => {
   }
 
   try {
-const [result] = await pool.query(
+const result = await boardWrite(board_id, req.user.user_id,
   `INSERT INTO pins (title, description, image_url, link_url, user_id, board_id)
 VALUES (?, ?, ?, ?, ?, ?)`,
   [title, description, img_blob, destination, user_id, board_id]
 );
+
+    if (!result) {
+      return res.status(404).json({ error: 'Destination board not found' });
+    }
 
     res.status(201).json({ pin_id: result.insertId });
   } catch (err) {
@@ -315,11 +330,15 @@ exports.createPixabayPin = async (req, res) => {
   }
 
   try {
-    const [result] = await pool.query(
+    const result = await boardWrite(board_id, req.user.user_id,
       `INSERT INTO pins (title, description, image_url, link_url, user_id, board_id)
 VALUES (?, ?, ?, ?, ?, ?)`,
       [title, description, img_blob, destination, user_id, board_id]
     );
+
+    if (!result) {
+      return res.status(404).json({ error: 'Destination board not found' });
+    }
 
     res.status(201).json({ pin_id: result.insertId });
   } catch (err) {

@@ -181,3 +181,41 @@ exports.removeReference = async (req, res) => {
     res.status(500).json({ error: 'Unable to remove saved reference' });
   }
 };
+
+exports.deleteBoard = async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [boards] = await connection.query(
+      'SELECT board_id FROM boards WHERE board_id = ? AND user_id = ? FOR UPDATE',
+      [req.params.board_id, req.user.user_id]
+    );
+    if (!boards.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+    // A locking read sees committed pin writes that completed before our board lock.
+    const [originals] = await connection.query(
+      'SELECT pin_id FROM pins WHERE board_id = ? LIMIT 1 FOR UPDATE', [req.params.board_id]
+    );
+    if (originals.length) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'This board contains original pins. Move or delete them before deleting the board.' });
+    }
+    await connection.query('DELETE FROM board_pins WHERE board_id = ?', [req.params.board_id]);
+    await connection.query('DELETE FROM board_follows WHERE board_id = ?', [req.params.board_id]);
+    await connection.query('DELETE FROM boards WHERE board_id = ? AND user_id = ?', [req.params.board_id, req.user.user_id]);
+    await connection.commit();
+    res.status(204).end();
+  } catch (error) {
+    if (connection) {
+      try { await connection.rollback(); }
+      catch (rollbackError) { console.error('Board deletion rollback failed:', rollbackError); }
+    }
+    console.error('Failed to delete board:', error);
+    res.status(500).json({ error: 'Unable to delete board' });
+  } finally {
+    if (connection) connection.release();
+  }
+};

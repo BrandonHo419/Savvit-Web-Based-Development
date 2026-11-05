@@ -3,7 +3,7 @@ import { apiFetch } from '../api.js';
 
 import { state, onSessionReady } from './state.js';
 import { create_pin } from './modal_and_pin_script.js';
-import { deleteBoard } from './delete.js';
+import { setupBoardDeletion } from './board_deletion.js';
 
 export function buildImageElement(src, onloadCallback) {
   const img = new Image();
@@ -38,6 +38,7 @@ onSessionReady(async () => {
     document.querySelector('.add_pin').style.display = board.is_owner ? 'flex' : 'none';
     state.canEditBoard = board.is_owner;
     setupBoardSettings(board);
+    setupBoardDeletion(board);
   }
   await fetchBoards(boardIdFromURL);
 
@@ -177,15 +178,6 @@ function upload_link() {
 document.getElementById('closeUploadPopup').addEventListener('click', () => {
   document.getElementById('uploadLinkPopup').style.display = 'none';
 });
-
-// document.querySelectorAll('.delete-board-btn').forEach(btn => {
-//   btn.addEventListener('click', () => {
-//     const boardId = btn.dataset.boardId;
-//     deleteBoard(boardId, () => {
-//       location.reload(); // Or update dropdown/grid dynamically
-//     });
-//   });
-// });
 
 document.getElementById('confirmUploadLink').addEventListener('click', () => {
   const url = document.getElementById('uploadLinkInput').value.trim();

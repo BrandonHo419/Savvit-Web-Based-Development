@@ -151,8 +151,8 @@ repeat saves do not add duplicate engagement records.
 The new `GET /boards/:board_id` endpoint returns accessible board metadata and an
 `is_owner` flag; the server still enforces all permissions independently of the UI.
 No schema migration or backfill is needed: existing originals continue to appear
-through `pins.board_id`. Deleting boards, semi-private
-invitations remain pending. Individual saved references can be removed as described in Stage 6.
+through `pins.board_id`. Semi-private invitations remain pending. Restricted board
+deletion is described in Stage 7. Individual saved references can be removed as described in Stage 6.
 
 Manual workflow check:
 
@@ -336,3 +336,46 @@ revoked original access, preservation of originals/other memberships, database
 failures, control visibility, cancellation, duplicate clicks, stale completion,
 and LF/CRLF frontend loading. These use database and DOM substitutes; real MySQL
 execution and browser layout require the local checks above.
+
+
+### Restricted board deletion (Stage 7)
+
+Owners can choose **Delete board** under Board settings. Confirmation explains
+that this removes the board and its saved references, while originals elsewhere
+remain unchanged. Success returns to Home. Boards containing any original pins
+are blocked; handle those originals first. This stage does not add bulk original
+pin deletion, automatic moves, upload deletion or a schema migration.
+
+`DELETE /boards/:board_id` requires authentication, CSRF and ownership. It locks
+and rechecks the owned board inside a transaction, checks for original pins,
+then deletes destination references, board follows and the board. Success returns
+an empty 204. A board containing originals returns 409 with an explanation.
+Missing, invalid or inaccessible board IDs return 404, including repeated deletion;
+database failures return a generic 500 and roll back the transaction. Global CSRF
+middleware rejects requests without a valid token with 403 before route checks.
+
+Pin uploads, provider imports and moves now lock and recheck the destination board
+inside their write transaction using the same board row lock. This prevents those
+application operations from creating orphaned originals during a concurrent board
+deletion. An upload is cleaned up if its destination has disappeared at that recheck.
+No foreign key is added to `pins.board_id`: direct database writes outside these
+application paths must still preserve integrity. Deadlocks/database failures are
+reported as failures and may be retried; no automatic retry is introduced.
+
+Local verification using disposable boards:
+1. Create an empty board, open settings, cancel deletion and confirm it remains.
+   Confirm deletion and verify navigation to Home and absence after reload.
+2. Create a board containing only saved references. Delete it and confirm the
+   originals, comments and other boards' references remain available.
+3. Try deleting a board with an original pin: expect the explanatory error and
+   no removed content. Verify it still works after reloading.
+4. As a second account, open a public board owned by the first account. No deletion
+   control should be shown. Server-side nonowner deletion must return 404.
+5. Create an uploaded pin normally and save/import/move content as before, checking
+   that the destination transaction changes have not interrupted those workflows.
+
+Tests cover permissions, CSRF, original-pin blocking, reference/follow preservation,
+rollback failures, stale destination checks, upload cleanup, transaction ordering,
+confirmation, duplicate clicks and LF/CRLF frontend loading. They use database and
+DOM substitutes. Actual InnoDB locking/concurrency and browser layout still require
+real MySQL/browser verification.

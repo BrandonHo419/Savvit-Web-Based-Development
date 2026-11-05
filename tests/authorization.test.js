@@ -30,6 +30,9 @@ const writes = [];
 const savedPins = new Set();
 let failSaveEngagement = false;
 let failReferenceRemoval = false;
+let failBoardDeletion = '';
+let missingLockedBoard = false;
+const boardFollows = new Set();
 let failBoardUpdate = false;
 const uploadDirectory = path.join(__dirname, '../public/uploads');
 const uploadFilename = `authorization-test-${require('node:crypto').randomUUID()}.png`;
@@ -59,6 +62,25 @@ async function query(sql, params = []) {
         if (board) fields.forEach((field, i) => { board[field] = params[i]; });
         writes.push({ sql: q, params });
         return [{ affectedRows: board ? 1 : 0 }];
+    }
+    if (q === 'SELECT board_id FROM boards WHERE board_id = ? AND user_id = ? FOR UPDATE') {
+        return [missingLockedBoard ? [] : boards.filter(b => b.board_id === Number(params[0]) && b.user_id === params[1])];
+    }
+    if (q === 'SELECT pin_id FROM pins WHERE board_id = ? LIMIT 1 FOR UPDATE') {
+        return [pins.filter(p => p.board_id === Number(params[0])).slice(0, 1)];
+    }
+    if (['DELETE FROM board_pins WHERE board_id = ?', 'DELETE FROM board_follows WHERE board_id = ?',
+        'DELETE FROM boards WHERE board_id = ? AND user_id = ?'].includes(q)) {
+        if (q.includes(failBoardDeletion) && failBoardDeletion) throw new Error('Simulated board deletion failure');
+        if (q.startsWith('DELETE FROM boards ')) {
+            const index = boards.findIndex(b => b.board_id === Number(params[0]) && b.user_id === params[1]);
+            if (index >= 0) boards.splice(index, 1);
+        } else {
+            const target = q.includes('board_pins') ? savedPins : boardFollows;
+            for (const key of target) if (key.startsWith(`${params[0]}:`)) target.delete(key);
+        }
+        writes.push({ sql: q, params });
+        return [{ affectedRows: 1 }];
     }
     if (q.startsWith('DELETE saved FROM board_pins saved')) {
         if (failReferenceRemoval) throw new Error('Simulated reference removal failure');
@@ -145,11 +167,13 @@ require.cache[require.resolve('../models/db')] = {
     loaded: true, exports: { query, async getConnection() {
         let snapshot;
         let writeCount;
+        let boardSnapshot;
+        let followSnapshot;
         return {
-            async beginTransaction() { snapshot = new Set(savedPins); writeCount = writes.length; },
+            async beginTransaction() { snapshot = new Set(savedPins); writeCount = writes.length; boardSnapshot = boards.map(b => ({ ...b })); followSnapshot = new Set(boardFollows); },
             query,
             async commit() {},
-            async rollback() { savedPins.clear(); snapshot.forEach(key => savedPins.add(key)); writes.length = writeCount; },
+            async rollback() { savedPins.clear(); snapshot.forEach(key => savedPins.add(key)); writes.length = writeCount; boards.splice(0, boards.length, ...boardSnapshot); boardFollows.clear(); followSnapshot.forEach(key => boardFollows.add(key)); },
             release() {}
         };
     } }
@@ -634,4 +658,95 @@ test('reference removal database failures preserve membership and return generic
         assert.deepEqual(await response.json(), { error: 'Unable to remove saved reference' });
         assert.ok(savedPins.has('10:210'));
     } finally { failReferenceRemoval = false; }
+});
+
+
+test('owners can delete empty and reference-only boards without touching originals or other boards', async () => {
+    for (const boardId of [30, 31]) {
+        boards.push({ board_id: boardId, user_id: 1, visibility: 'private' });
+        if (boardId === 31) savedPins.add('31:210');
+        savedPins.add('20:210');
+        boardFollows.add(`${boardId}:2`);
+        boardFollows.add('20:1');
+        const originalPins = JSON.stringify(pins);
+        const response = await request(`/boards/${boardId}`, { actor: alice, method: 'DELETE' });
+        assert.equal(response.status, 204);
+        assert.equal(await response.text(), '');
+        assert.ok(!boards.some(b => b.board_id === boardId));
+        assert.equal(savedPins.has(`${boardId}:210`), false);
+        assert.equal(boardFollows.has(`${boardId}:2`), false);
+        assert.ok(savedPins.has('20:210'));
+        assert.ok(boardFollows.has('20:1'));
+        assert.equal(JSON.stringify(pins), originalPins);
+        assert.equal((await request(`/boards/${boardId}`, { actor: alice, method: 'DELETE' })).status, 404);
+    }
+});
+
+test('deleting a board with originals is blocked before mutations', async () => {
+    const count = writes.length;
+    const response = await request('/boards/10', { actor: alice, method: 'DELETE' });
+    assert.equal(response.status, 409);
+    assert.match((await response.json()).error, /contains original pins/);
+    assert.equal(writes.length, count);
+    assert.ok(boards.some(b => b.board_id === 10));
+});
+
+test('board deletion rejects nonowners, admins, invalid IDs and CSRF failures', async () => {
+    const count = writes.length;
+    for (const actor of [bob, admin]) assert.equal((await request('/boards/11', { actor, method: 'DELETE' })).status, 404);
+    for (const id of ['0', 'abc', '9999']) assert.equal((await request(`/boards/${id}`, { actor: alice, method: 'DELETE' })).status, 404);
+    assert.equal((await request('/boards/10', { method: 'DELETE' })).status, 403);
+    assert.equal((await request('/boards/10', { actor: alice, token: bob.token, method: 'DELETE' })).status, 403);
+    assert.equal(writes.length, count);
+});
+
+test('board deletion rolls back removed references and follows on subsequent failures', async () => {
+    boards.push({ board_id: 32, user_id: 1, visibility: 'private' });
+    savedPins.add('32:210');
+    boardFollows.add('32:2');
+    try {
+        for (const failingTable of ['board_pins', 'board_follows', 'boards']) {
+            failBoardDeletion = `DELETE FROM ${failingTable} `;
+            const response = await request('/boards/32', { actor: alice, method: 'DELETE' });
+            assert.equal(response.status, 500);
+            assert.deepEqual(await response.json(), { error: 'Unable to delete board' });
+            assert.ok(boards.some(b => b.board_id === 32));
+            assert.ok(savedPins.has('32:210'));
+            assert.ok(boardFollows.has('32:2'));
+        }
+    } finally { failBoardDeletion = ''; }
+});
+
+test('deleted destinations are rechecked under lock for deletion, imports and moves', async () => {
+    const count = writes.length;
+    try {
+        missingLockedBoard = true;
+        assert.equal((await request('/boards/10', { actor: alice, method: 'DELETE' })).status, 404);
+        for (const provider of ['youtube', 'pixabay']) {
+            assert.equal((await request(`/pins/${provider}`, { actor: alice, method: 'POST', body: {
+                title: 'Pin', destination: 'https://example.test', img_blob: 'https://example.test/image.png', board_id: 10
+            } })).status, 404);
+        }
+        assert.equal((await request('/pins/100/move', { actor: alice, method: 'PUT', body: { board_id: 11 } })).status, 404);
+        assert.equal(writes.length, count);
+    } finally { missingLockedBoard = false; }
+});
+
+test('upload is cleaned up if the destination disappears before its locked recheck', async () => {
+    const beforeFiles = fs.readdirSync(uploadDirectory).sort();
+    const count = writes.length;
+    const form = new FormData();
+    form.set('title', 'Uploaded pin');
+    form.set('link_url', 'https://example.test');
+    form.set('board_id', '10');
+    form.set('image', new Blob(['test image'], { type: 'image/png' }), 'test.png');
+    try {
+        missingLockedBoard = true;
+        const response = await fetch(`${baseUrl}/pins`, {
+            method: 'POST', headers: { Cookie: alice.cookie, 'X-CSRF-TOKEN': alice.token }, body: form
+        });
+        assert.equal(response.status, 404);
+        assert.equal(writes.length, count);
+        assert.deepEqual(fs.readdirSync(uploadDirectory).sort(), beforeFiles);
+    } finally { missingLockedBoard = false; }
 });

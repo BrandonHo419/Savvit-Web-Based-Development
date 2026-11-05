@@ -1,6 +1,4 @@
 import { apiFetch } from '../api.js';
-import { loadPinsForBoard } from './board.js';
-import { state } from './state.js';
 
 /**
  * Delete a pin by ID
@@ -42,29 +40,12 @@ export async function deletePin(pinId, onSuccess) {
  * @param {Function} onSuccess - Optional callback to run after successful deletion
  */
 export async function deleteBoard(boardId, onSuccess = null) {
-  if (!confirm('Are you sure you want to delete this board? All its pins will be lost.')) return;
-
-  try {
-    const res = await apiFetch(`/boards/${boardId}`, { method: 'DELETE' });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(errorText || 'Failed to delete board.');
-    }
-
-    // Optional DOM cleanup if necessary
-    document.querySelector(`#board_select option[value="${boardId}"]`)?.remove();
-
-    if (state.activeBoardId === boardId) {
-      state.activeBoardId = null;
-      document.querySelector('.pin_container').innerHTML = '';
-    }
-
-    if (typeof onSuccess === 'function') onSuccess();
-
-    alert('Board deleted.');
-  } catch (err) {
-    console.error('Board deletion error:', err);
-    alert('Could not delete board.');
+  if (!window.confirm('Delete this board and its saved references? Original pins on other boards remain unchanged. Boards containing original pins cannot be deleted. This cannot be undone.')) return false;
+  const res = await apiFetch(`/boards/${encodeURIComponent(boardId)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const result = await res.json().catch(() => ({}));
+    throw new Error(result.error || 'Unable to delete board. Please try again.');
   }
+  onSuccess?.();
+  return true;
 }
