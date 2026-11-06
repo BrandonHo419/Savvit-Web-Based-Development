@@ -104,3 +104,14 @@ for (const [label, lineEnding] of [['LF', '\n'], ['CRLF', '\r\n']]) {
         assert.equal(elements['board-settings-status'].textContent, 'Board settings saved.');
     });
 }
+
+test('semi-private visibility confirms activation of retained grants', async () => {
+    const cancelled = setup({ confirm: false });
+    cancelled.elements['board-visibility'].value = 'semi-private';
+    await cancelled.submit();
+    assert.equal(cancelled.calls.length, 0);
+    const accepted = setup();
+    accepted.elements['board-visibility'].value = 'semi-private';
+    await accepted.submit();
+    assert.deepEqual(JSON.parse(accepted.calls[0][1].body), { visibility: 'semi-private' });
+});

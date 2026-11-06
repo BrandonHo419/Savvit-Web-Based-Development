@@ -1,3 +1,4 @@
+import { setupBoardSharing } from './board_sharing.js';
 import { setupBoardSettings } from './board_settings.js';
 import { apiFetch } from '../api.js';
 
@@ -39,6 +40,7 @@ onSessionReady(async () => {
     state.canEditBoard = board.is_owner;
     setupBoardSettings(board);
     setupBoardDeletion(board);
+    setupBoardSharing(board);
   }
   await fetchBoards(boardIdFromURL);
 

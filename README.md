@@ -78,7 +78,10 @@ Use Node.js 24, npm, and MySQL 8. The smoke tests require Node.js 18 or later.
    `DB_NAME` rather than importing over data you want to keep. Development
    records in the dump are not a documented demo account.
 
-5. Run `npm start` and open `http://localhost:3000/landingpage.html`.
+5. Apply `migrations/008_board_viewers.sql` to the selected database using the
+   MySQL client (`SOURCE C:/path/to/Savvit-Web/migrations/008_board_viewers.sql;`).
+   This is required for both fresh databases and upgrades; see Stage 8 below.
+6. Run `npm start` and open `http://localhost:3000/landingpage.html`.
    In PowerShell, use `npm.cmd ci`, `npm.cmd test`, and `npm.cmd start` if
    execution policy blocks the npm PowerShell wrapper.
 
@@ -113,7 +116,7 @@ real-database integrity and browser interactions still need integration checks.
 - Board and pin APIs still require login; anonymous public browsing is pending.
 - New boards are private. Existing board visibility is unchanged.
 - Owners can read their private boards; other authenticated users can read only
-  public boards. Semi-private invitations are not implemented yet.
+  public boards or semi-private boards on which they have an explicit viewer grant.
 - A pin inherits access from its original board (`pins.board_id`). A pin with
   no valid original board is inaccessible until its data is repaired.
 - Creating pins and saving references require ownership of the destination.
@@ -151,7 +154,7 @@ repeat saves do not add duplicate engagement records.
 The new `GET /boards/:board_id` endpoint returns accessible board metadata and an
 `is_owner` flag; the server still enforces all permissions independently of the UI.
 No schema migration or backfill is needed: existing originals continue to appear
-through `pins.board_id`. Semi-private invitations remain pending. Restricted board
+through `pins.board_id`. Semi-private viewer grants are described in Stage 8. Restricted board
 deletion is described in Stage 7. Individual saved references can be removed as described in Stage 6.
 
 Manual workflow check:
@@ -177,7 +180,7 @@ full input validation also remain required before public deployment.
 
 - **Application wiring:** some routes, UI references, and asset paths are incomplete or inconsistent.
 - **Configuration:** active database settings use environment variables, but connection pools are duplicated and unused legacy routing code remains.
-- **Authentication and authorization:** session-derived identity, ownership and admin checks are implemented for active routes; semi-private sharing and real-database/browser verification are pending.
+- **Authentication and authorization:** session-derived identity, ownership and admin checks are implemented for active routes; semi-private viewer grants are implemented; real-database/browser verification is pending.
 - **API credentials:** revoked legacy values must be removed wherever they remain; replacement credentials require secure server-side handling before public deployment.
 - **File uploads:** uploaded images need validation, sensible size limits, and durable storage.
 - **Testing and deployment:** smoke and database-substituted authorization tests exist; real-database and browser coverage, reproducible containers, and a hosted demo remain pending.
@@ -241,11 +244,11 @@ On a board you own, expand **Board settings** to edit its name, description or
 private/public visibility. Changes take effect only after **Save settings**;
 **Reset changes** restores the last saved form values. Publishing requires a
 confirmation. Public boards currently require a signed-in viewer; anonymous
-browsing and semi-private invitations remain pending.
+browsing remains pending. Semi-private viewer grants are described in Stage 8.
 
 `PATCH /boards/:board_id` accepts one or more of `name` (trimmed, 1–255 characters),
 `description` (text, up to 10,000 characters; empty clears it), and `visibility`
-(`private` or `public`). Unknown fields and invalid values return 400. The route
+(`private`, `public` or `semi-private`). Unknown fields and invalid values return 400. The route
 requires a session, matching CSRF token, and board ownership; public visibility
 and administrator status do not grant edit access. Missing/inaccessible boards
 return 404. Omitted fields remain unchanged. Existing endpoints are unchanged.
@@ -286,7 +289,7 @@ is reflected on the next search or reload. Offset pagination may shift when
 boards are created or change visibility between requests.
 
 Explore remains the existing external-content page. Anonymous discovery and
-semi-private invitations are not included. No schema change or new dependency
+semi-private boards are excluded from discovery. No schema change or new dependency
 is required. Tests use database and DOM substitutes, not real MySQL or browser
 rendering.
 
@@ -379,3 +382,83 @@ rollback failures, stale destination checks, upload cleanup, transaction orderin
 confirmation, duplicate clicks and LF/CRLF frontend loading. They use database and
 DOM substitutes. Actual InnoDB locking/concurrency and browser layout still require
 real MySQL/browser verification.
+
+
+### Semi-private sharing (Stage 8)
+
+Owners can grant and revoke viewing access under **Board settings → Board viewers**
+using an existing account's exact, case-sensitive username. Only usernames and user
+IDs are listed; email addresses are not exposed. Grants are idempotent. No messages
+or notifications are sent: share the board's direct URL with the viewer yourself.
+A Shared with me listing and invitation-acceptance workflow are not included.
+
+- **Private:** owner-only, regardless of stored grants.
+- **Semi-private:** owner plus explicitly granted viewers.
+- **Public:** all signed-in accounts, regardless of stored grants.
+
+Grants remain stored when visibility changes. Switching to semi-private asks for
+confirmation because retained grants become active. Revoking a grant on a public
+board does not restrict public access. Viewers cannot edit board settings, manage
+grants, create originals there, move/delete originals, delete the board or remove
+its saved references. Existing pin interactions (likes/comments and saving a
+reference to their own board) remain available to readers.
+
+Original-board access governs pins, comments, uploads, saved references, counts
+and thumbnails. Access to a destination board alone never reveals an inaccessible
+original. Revocation applies on subsequent requests; already downloaded content
+cannot be recalled. Semi-private boards never appear in public discovery.
+
+#### Upgrade an existing database
+
+Stop the application and back up the database first. In the MySQL client, select
+your existing database and execute:
+
+```sql
+USE your_database_name;
+SOURCE C:/Users/brand/Documents/GitHub/Savvit-Web/migrations/008_board_viewers.sql;
+```
+
+Use your actual database name and repository path. **Do not reimport database.sql
+into an existing database:** that development dump contains DROP statements.
+The migration expands the board visibility enum and adds the `board_viewers` table
+with a composite primary key and cascading foreign keys. Existing boards/data are
+preserved. DDL commits implicitly; both statements can be rerun if interrupted.
+Apply the migration before starting Stage 8 code. Do not deploy if either statement
+fails. The legacy pin visibility enum remains binary; semi-private uploads store
+`private` there while authorization uses the original board's visibility.
+
+Reversing the code patch does not reverse this database migration. The additional
+table/enum value can be retained; older code will treat semi-private boards as
+owner-only. Restore the tested backup only if you deliberately need database
+rollback and understand that later data changes would be lost.
+
+#### API and verification
+
+All routes require login and board ownership; mutations require CSRF:
+- `GET /boards/:board_id/viewers` returns `{ viewers: [{ user_id, username }] }`.
+- `POST /boards/:board_id/viewers` accepts only `{ username }`, trimmed to 1–100
+  characters, and returns 204 (including repeated grants). Unknown usernames and
+  the owner's username return 404; invalid input returns 400.
+- `DELETE /boards/:board_id/viewers/:user_id` returns 204, including absent grants.
+  Invalid viewer IDs return 400. Missing/inaccessible boards return 404.
+
+Database failures return generic 500 responses. Grant mutations lock/recheck the
+owned board in their transaction, coordinating with board deletion. The database
+cascades grants when a board or user is deleted.
+
+Verify with accounts A, B and an uninvited C:
+1. As A, create a board and original image pin; grant B's exact username and switch
+   to semi-private. B can open the direct URL; C cannot. It is absent from discovery.
+2. B saves a reference to an owned board. B cannot edit A's board or original.
+3. Revoke B. Reload as B: the board, pin and uploaded image are denied, and the saved
+   reference disappears (including its count/thumbnail contribution).
+4. Grant B again. Switch to Private: B remains denied. Switch to Semi-private and
+   confirm: B regains access. Switch to Public: C gains access without a grant.
+5. Test incorrect username casing, duplicate grants, revoked-user retries and owner
+   uploads into a semi-private board. No duplicate viewer rows should appear.
+6. Delete a disposable shared board with no originals; its grants should be removed.
+
+Automated tests use database and DOM substitutes, including revocation, inherited
+privacy, owner-only grants, validation, failures, confirmation and duplicate actions.
+The migration, foreign-key cascades and SQL execution still need real MySQL validation;
+browser layout and workflows need the local checks above.

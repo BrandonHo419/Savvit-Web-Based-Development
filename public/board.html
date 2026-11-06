@@ -77,13 +77,27 @@
             <select id="board-visibility" name="visibility" aria-describedby="board-visibility-help">
               <option value="private">Private</option>
               <option value="public">Public</option>
+              <option value="semi-private">Semi-private</option>
             </select>
-            <p id="board-visibility-help">Private: only you can view this board. Public: other signed-in users can view it. Only you can edit it. Anonymous browsing and invited viewers are not available yet.</p>
+            <p id="board-visibility-help">Private: only you can view this board. Public: other signed-in users can view it. Semi-private: only you and selected viewers can view it. Only you can edit the board. Anonymous browsing is not available.</p>
             <p>Changing visibility also affects access to pins originally created here, including references saved on other boards.</p>
             <button type="submit">Save settings</button>
             <button type="reset">Reset changes</button>
             <p id="board-settings-status" role="status" aria-live="polite"></p>
           </form>
+          <section id="board-sharing" hidden aria-labelledby="board-sharing-title">
+            <h3 id="board-sharing-title">Board viewers</h3>
+            <p>Viewer access applies only while visibility is Semi-private. Private stays owner-only; Public remains visible to all signed-in users. Viewer grants are retained when visibility changes.</p>
+            <p>After granting access, send the viewer this board's URL. No notification is sent.</p>
+            <form id="board-sharing-form">
+              <label for="viewer-username">Exact username (case-sensitive)</label>
+              <input id="viewer-username" required maxlength="100" autocomplete="off">
+              <button type="submit" id="add-viewer">Grant viewing access</button>
+            </form>
+            <ul id="board-viewers"></ul>
+            <button type="button" id="reload-viewers">Reload viewers</button>
+            <p id="sharing-status" role="status" aria-live="polite"></p>
+          </section>
           <p>Delete this board only when it contains no original pins. Saved references will be removed; their originals remain unchanged.</p>
           <button type="button" id="delete-board" hidden>Delete board</button>
           <p id="delete-board-status" role="status" aria-live="polite"></p>

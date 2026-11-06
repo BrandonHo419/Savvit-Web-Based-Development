@@ -41,6 +41,7 @@ export function setupBoardSettings(board) {
       return;
     }
     if (changes.visibility === 'public' && !window.confirm('Make this board and its original pins visible to other signed-in users?')) return;
+    if (changes.visibility === 'semi-private' && !window.confirm('Allow all listed viewers to access this board and its original pins? Retained viewer grants will become active.')) return;
     saving = true;
     controls.forEach(control => { control.disabled = true; });
     status.textContent = 'Saving…';

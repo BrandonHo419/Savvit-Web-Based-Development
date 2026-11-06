@@ -17,7 +17,7 @@ exports.getBoardsForUser = async (req, res) => {
     FROM pins p JOIN boards original ON original.board_id = p.board_id
     WHERE (p.board_id = b.board_id OR EXISTS (
       SELECT 1 FROM board_pins saved WHERE saved.board_id = b.board_id AND saved.pin_id = p.pin_id
-    )) AND (original.user_id = ? OR original.visibility = 'public')
+    )) AND (original.user_id = ? OR original.visibility = 'public' OR (original.visibility = 'semi-private' AND EXISTS (SELECT 1 FROM board_viewers access WHERE access.board_id = original.board_id AND access.user_id = ?)))
     ORDER BY p.created_at DESC
     LIMIT 1
   ) AS thumbnail,
@@ -25,12 +25,12 @@ exports.getBoardsForUser = async (req, res) => {
     SELECT COUNT(*) FROM pins p JOIN boards original ON original.board_id = p.board_id
     WHERE (p.board_id = b.board_id OR EXISTS (
       SELECT 1 FROM board_pins saved WHERE saved.board_id = b.board_id AND saved.pin_id = p.pin_id
-    )) AND (original.user_id = ? OR original.visibility = 'public')
+    )) AND (original.user_id = ? OR original.visibility = 'public' OR (original.visibility = 'semi-private' AND EXISTS (SELECT 1 FROM board_viewers access WHERE access.board_id = original.board_id AND access.user_id = ?)))
   ) AS pin_count
 FROM boards b
-WHERE b.user_id = ? AND (b.user_id = ? OR b.visibility = 'public')
+WHERE b.user_id = ? AND (b.user_id = ? OR b.visibility = 'public' OR (b.visibility = 'semi-private' AND EXISTS (SELECT 1 FROM board_viewers access WHERE access.board_id = b.board_id AND access.user_id = ?)))
 ORDER BY b.created_at DESC;`,
-      [req.user.user_id, req.user.user_id, user_id, req.user.user_id]
+      [req.user.user_id, req.user.user_id, req.user.user_id, req.user.user_id, user_id, req.user.user_id, req.user.user_id]
     );
     res.json(rows);
   } catch (err) {
@@ -78,11 +78,11 @@ LEFT JOIN engagements e1 ON e1.pin_id = p.pin_id AND e1.user_id = ? AND e1.type 
 LEFT JOIN engagements e2 ON e2.pin_id = p.pin_id AND e2.type = 'like'
 WHERE (p.board_id = ? OR EXISTS (
   SELECT 1 FROM board_pins saved WHERE saved.board_id = ? AND saved.pin_id = p.pin_id
-)) AND (original.user_id = ? OR original.visibility = 'public')
+)) AND (original.user_id = ? OR original.visibility = 'public' OR (original.visibility = 'semi-private' AND EXISTS (SELECT 1 FROM board_viewers access WHERE access.board_id = original.board_id AND access.user_id = ?)))
 GROUP BY p.pin_id, u.username
 ORDER BY p.created_at DESC
       `,
-      [userId, boardId, boardId, userId]
+      [userId, boardId, boardId, userId, userId]
     );
 
     res.status(200).json(pins);
@@ -120,8 +120,8 @@ exports.updateBoard = async (req, res) => {
     changes.description = body.description.trim();
   }
   if (Object.hasOwn(body, 'visibility')) {
-    if (!['private', 'public'].includes(body.visibility)) {
-      return res.status(400).json({ error: 'Visibility must be private or public' });
+    if (!['private', 'public', 'semi-private'].includes(body.visibility)) {
+      return res.status(400).json({ error: 'Visibility must be private, public or semi-private' });
     }
     changes.visibility = body.visibility;
   }

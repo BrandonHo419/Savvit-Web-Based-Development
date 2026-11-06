@@ -20,7 +20,8 @@ exports.createPin = async (req, res) => {
     board_id
   } = req.body;
   const user_id = req.user.user_id;
-  const visibility = req.accessBoard.visibility;
+  // The legacy pin enum stays binary; access is always governed by its original board.
+  const visibility = req.accessBoard.visibility === 'public' ? 'public' : 'private';
 
   if (typeof title !== 'string' || typeof link_url !== 'string' || !title.trim() || !link_url.trim()) {
     return res.status(400).json({ error: 'Title and link URL are required.' });
@@ -63,9 +64,9 @@ exports.getAllPins = async (req, res) => {
        FROM pins p
        JOIN users u ON p.user_id = u.user_id
        JOIN boards b ON b.board_id = p.board_id
-       WHERE b.user_id = ? OR b.visibility = 'public'
+       WHERE b.user_id = ? OR b.visibility = 'public' OR (b.visibility = 'semi-private' AND EXISTS (SELECT 1 FROM board_viewers access WHERE access.board_id = b.board_id AND access.user_id = ?))
        ORDER BY p.created_at DESC`,
-       [req.user.user_id]
+       [req.user.user_id, req.user.user_id]
     );
     res.json(pins);
   } catch (err) {

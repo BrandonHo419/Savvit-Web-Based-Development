@@ -33,6 +33,9 @@ let failReferenceRemoval = false;
 let failBoardDeletion = '';
 let missingLockedBoard = false;
 const boardFollows = new Set();
+const boardViewers = new Set();
+let failSharing = false;
+const readable = (b, id) => b.user_id === id || b.visibility === 'public' || (b.visibility === 'semi-private' && boardViewers.has(`${b.board_id}:${id}`));
 let failBoardUpdate = false;
 const uploadDirectory = path.join(__dirname, '../public/uploads');
 const uploadFilename = `authorization-test-${require('node:crypto').randomUUID()}.png`;
@@ -63,6 +66,23 @@ async function query(sql, params = []) {
         writes.push({ sql: q, params });
         return [{ affectedRows: board ? 1 : 0 }];
     }
+    if (q.includes('board_viewers') && !q.includes('EXISTS')) {
+        if (failSharing) throw new Error('Simulated sharing failure');
+        if (q.startsWith('INSERT IGNORE INTO board_viewers')) {
+            boardViewers.add(`${params[0]}:${params[1]}`);
+            return [{ affectedRows: 1 }];
+        }
+        if (q.startsWith('DELETE FROM board_viewers')) {
+            boardViewers.delete(`${params[0]}:${params[1]}`);
+            return [{ affectedRows: 1 }];
+        }
+        if (q.startsWith('SELECT u.user_id, u.username')) {
+            return [users.filter(u => boardViewers.has(`${params[0]}:${u.user_id}`)).map(({ user_id, username }) => ({ user_id, username }))];
+        }
+        if (q.startsWith('SELECT user_id FROM board_viewers')) return [boardViewers.has(`${params[0]}:${params[1]}`) ? [{ user_id: params[1] }] : []];
+        throw new Error(`Unexpected sharing query: ${q}`);
+    }
+    if (q.startsWith('SELECT user_id FROM users WHERE CAST(username AS BINARY)')) return [users.filter(u => u.username === params[0])];
     if (q === 'SELECT board_id FROM boards WHERE board_id = ? AND user_id = ? FOR UPDATE') {
         return [missingLockedBoard ? [] : boards.filter(b => b.board_id === Number(params[0]) && b.user_id === params[1])];
     }
@@ -75,6 +95,7 @@ async function query(sql, params = []) {
         if (q.startsWith('DELETE FROM boards ')) {
             const index = boards.findIndex(b => b.board_id === Number(params[0]) && b.user_id === params[1]);
             if (index >= 0) boards.splice(index, 1);
+            for (const key of boardViewers) if (key.startsWith(`${params[0]}:`)) boardViewers.delete(key);
         } else {
             const target = q.includes('board_pins') ? savedPins : boardFollows;
             for (const key of target) if (key.startsWith(`${params[0]}:`)) target.delete(key);
@@ -114,7 +135,7 @@ async function query(sql, params = []) {
             return { ...p, board_owner_id: board.user_id, visibility: board.visibility };
         })];
     }
-    if (q.startsWith('SELECT b.user_id, b.visibility FROM pins')) {
+    if (q.startsWith('SELECT b.user_id, b.visibility, b.board_id FROM pins')) {
         return [pins.filter(p => p.image_url === params[0]).map(p => boards.find(b => b.board_id === p.board_id))];
     }
     if (q.startsWith('SELECT pin_id FROM comments')) {
@@ -134,7 +155,7 @@ async function query(sql, params = []) {
         return [pins.filter(p => {
             const original = boards.find(b => b.board_id === p.board_id);
             return (p.board_id === Number(params[1]) || savedPins.has(`${params[2]}:${p.pin_id}`))
-                && (original.user_id === params[3] || original.visibility === 'public');
+                && readable(original, params[3]);
         })];
     }
     if (q.startsWith('SELECT p.*, u.username')) {
@@ -143,18 +164,18 @@ async function query(sql, params = []) {
         assert.match(q, /WHERE b.user_id = \? OR b.visibility = 'public'/);
         return [pins.filter(p => {
             const b = boards.find(b => b.board_id === p.board_id);
-            return b.user_id === params[0] || b.visibility === 'public';
+            return readable(b, params[0]);
         })];
     }
     if (q.startsWith('SELECT b.board_id,')) {
-        assert.match(q, /b.user_id = \? AND \(b.user_id = \? OR b.visibility = 'public'\)/);
+        assert.match(q, /b.user_id = \? AND \(b.user_id = \? OR b.visibility = 'public'/);
         assert.match(q, /EXISTS \( SELECT 1 FROM board_pins/);
-        return [boards.filter(b => b.user_id === Number(params[2]) && (b.user_id === params[3] || b.visibility === 'public')).map(b => ({
+        return [boards.filter(b => b.user_id === Number(params[4]) && readable(b, params[5])).map(b => ({
             ...b,
             pin_count: pins.filter(p => {
                 const original = boards.find(board => board.board_id === p.board_id);
                 return (p.board_id === b.board_id || savedPins.has(`${b.board_id}:${p.pin_id}`))
-                    && (original.user_id === params[1] || original.visibility === 'public');
+                    && readable(original, params[1]);
             }).length
         }))];
     }
@@ -169,11 +190,12 @@ require.cache[require.resolve('../models/db')] = {
         let writeCount;
         let boardSnapshot;
         let followSnapshot;
+        let viewerSnapshot;
         return {
-            async beginTransaction() { snapshot = new Set(savedPins); writeCount = writes.length; boardSnapshot = boards.map(b => ({ ...b })); followSnapshot = new Set(boardFollows); },
+            async beginTransaction() { snapshot = new Set(savedPins); writeCount = writes.length; boardSnapshot = boards.map(b => ({ ...b })); followSnapshot = new Set(boardFollows); viewerSnapshot = new Set(boardViewers); },
             query,
             async commit() {},
-            async rollback() { savedPins.clear(); snapshot.forEach(key => savedPins.add(key)); writes.length = writeCount; boards.splice(0, boards.length, ...boardSnapshot); boardFollows.clear(); followSnapshot.forEach(key => boardFollows.add(key)); },
+            async rollback() { savedPins.clear(); snapshot.forEach(key => savedPins.add(key)); writes.length = writeCount; boards.splice(0, boards.length, ...boardSnapshot); boardFollows.clear(); followSnapshot.forEach(key => boardFollows.add(key)); boardViewers.clear(); viewerSnapshot.forEach(key => boardViewers.add(key)); },
             release() {}
         };
     } }
@@ -509,7 +531,7 @@ test('board settings validate the complete request before writing', async () => 
     const count = writes.length;
     for (const body of [{}, [], { name: null }, { name: '  ' }, { name: 'x'.repeat(256) },
         { description: null }, { description: {} }, { description: 'x'.repeat(10001) },
-        { visibility: 'semi-private' }, { visibility: 'PUBLIC' }, { visibility: null },
+        { visibility: 'unknown' }, { visibility: 'PUBLIC' }, { visibility: null },
         { name: 'Valid', visibility: 'invalid' }, { board_id: 20 }, { extra: true }]) {
         assert.equal((await request('/boards/10', { actor: alice, method: 'PATCH', body })).status, 400);
     }
@@ -749,4 +771,140 @@ test('upload is cleaned up if the destination disappears before its locked reche
         assert.equal(writes.length, count);
         assert.deepEqual(fs.readdirSync(uploadDirectory).sort(), beforeFiles);
     } finally { missingLockedBoard = false; }
+});
+
+test('owners grant exact usernames idempotently and list only viewer IDs and usernames', async () => {
+    boardViewers.clear();
+    for (let i = 0; i < 2; i++) {
+        assert.equal((await request('/boards/10/viewers', { actor: alice, method: 'POST', body: { username: 'user2' } })).status, 204);
+    }
+    assert.equal(boardViewers.size, 1);
+    const response = await request('/boards/10/viewers', { actor: alice });
+    assert.match(response.headers.get('cache-control'), /no-store/);
+    assert.deepEqual(await response.json(), { viewers: [{ user_id: 2, username: 'user2' }] });
+    for (const username of ['User2', 'missing', 'user1']) {
+        assert.equal((await request('/boards/10/viewers', { actor: alice, method: 'POST', body: { username } })).status, 404);
+    }
+});
+
+test('semi-private grants propagate to board, pin, comments, upload and saved references; revocation removes access', async () => {
+    const original = { ...boards[0] };
+    boardViewers.clear();
+    savedPins.add('20:100');
+    try {
+        assert.equal((await request('/boards/10', { actor: alice, method: 'PATCH', body: { visibility: 'semi-private' } })).status, 200);
+        const urls = ['/boards/10', '/boards/10/pins', '/pins/100', '/pins/100/comments', `/uploads/${uploadFilename}`];
+        for (const url of urls) assert.equal((await request(url, { actor: bob })).status, 404);
+        await request('/boards/10/viewers', { actor: alice, method: 'POST', body: { username: 'user2' } });
+        for (const url of urls) assert.equal((await request(url, { actor: bob })).status, 200);
+        assert.equal((await (await request('/boards/10', { actor: bob })).json()).is_owner, false);
+        assert.ok((await (await request('/boards/20/pins', { actor: bob })).json()).some(p => p.pin_id === 100));
+        assert.ok((await (await request('/pins', { actor: bob })).json()).some(p => p.pin_id === 100));
+        assert.ok((await (await request('/boards/users/1/boards', { actor: bob })).json()).some(b => b.board_id === 10));
+        for (let i = 0; i < 2; i++) assert.equal((await request('/boards/10/viewers/2', { actor: alice, method: 'DELETE' })).status, 204);
+        for (const url of urls) assert.equal((await request(url, { actor: bob })).status, 404);
+        assert.ok(!(await (await request('/boards/20/pins', { actor: bob })).json()).some(p => p.pin_id === 100));
+        assert.ok(!(await (await request('/pins', { actor: bob })).json()).some(p => p.pin_id === 100));
+        const listed = await (await request('/boards/users/2/boards', { actor: bob })).json();
+        assert.equal(listed.find(b => b.board_id === 20).pin_count, 2); // Original 200 plus public saved 210.
+        assert.equal((await request('/pins/100', { actor: alice })).status, 200);
+    } finally { boards[0] = original; boardViewers.clear(); savedPins.delete('20:100'); }
+});
+
+test('private overrides retained grants and public discovery never lists semi-private boards', async () => {
+    const original = { ...boards[0] };
+    boardViewers.add('10:2');
+    try {
+        boards[0].visibility = 'private';
+        assert.equal((await request('/boards/10', { actor: bob })).status, 404);
+        boards[0].visibility = 'semi-private';
+        assert.equal((await request('/boards/10', { actor: bob })).status, 200);
+        assert.equal((await request('/boards/10', { actor: admin })).status, 404);
+        for (const actor of [alice, bob]) {
+            assert.ok(!(await (await request('/boards/public', { actor })).json()).boards.some(b => b.board_id === 10));
+        }
+        boards[0].visibility = 'public';
+        boardViewers.delete('10:2');
+        assert.equal((await request('/boards/10', { actor: bob })).status, 200);
+    } finally { boards[0] = original; boardViewers.clear(); }
+});
+
+test('shared destination access does not disclose inaccessible original references', async () => {
+    const original = { ...boards[1] };
+    savedPins.add('11:100');
+    boardViewers.add('11:2');
+    try {
+        boards[1].visibility = 'semi-private';
+        assert.deepEqual((await (await request('/boards/11/pins', { actor: bob })).json()).map(p => p.pin_id), [110, 210]);
+        assert.equal((await request('/pins/100', { actor: bob })).status, 404);
+    } finally { boards[1] = original; boardViewers.clear(); }
+});
+
+test('viewers cannot edit boards, originals, destination references or viewer grants', async () => {
+    const original = { ...boards[0] };
+    boards[0].visibility = 'semi-private';
+    boardViewers.add('10:2');
+    try {
+        for (const [path, method, body] of [
+            ['/boards/10', 'PATCH', { name: 'No' }], ['/boards/10', 'DELETE'],
+            ['/pins/100', 'DELETE'], ['/pins/100/move', 'PUT', { board_id: 20 }],
+            ['/pins/210/save', 'POST', { board_id: 10 }],
+            ['/boards/10/pins/210/reference', 'DELETE'], ['/boards/10/viewers', 'GET'],
+            ['/boards/10/viewers', 'POST', { username: 'user3' }], ['/boards/10/viewers/2', 'DELETE']
+        ]) assert.equal((await request(path, { actor: bob, method, body })).status, 404, path);
+        assert.equal((await request('/pins/100/save', { actor: bob, method: 'POST', body: { board_id: 20 } })).status, 200);
+    } finally { boards[0] = original; boardViewers.clear(); savedPins.delete('20:100'); }
+});
+
+test('viewer mutations validate input and reject cross-session CSRF', async () => {
+    for (const body of [{}, { username: '' }, { username: [] }, { username: 'x'.repeat(101) }, { username: 'user2', user_id: 3 }]) {
+        assert.equal((await request('/boards/10/viewers', { actor: alice, method: 'POST', body })).status, 400);
+    }
+    assert.equal((await request('/boards/10/viewers/abc', { actor: alice, method: 'DELETE' })).status, 400);
+    assert.equal((await request('/boards/10/viewers', { actor: alice, token: bob.token, method: 'POST', body: { username: 'user2' } })).status, 403);
+    assert.equal((await request('/boards/10/viewers/2', { actor: alice, token: bob.token, method: 'DELETE' })).status, 403);
+    assert.equal((await request('/boards/10/viewers')).status, 401);
+});
+
+test('sharing database failures fail closed and leave existing grants intact', async () => {
+    const original = { ...boards[0] };
+    boards[0].visibility = 'semi-private';
+    boardViewers.add('10:2');
+    try {
+        failSharing = true;
+        assert.equal((await request('/boards/10', { actor: bob })).status, 500);
+        assert.equal((await request('/boards/10/viewers', { actor: alice })).status, 500);
+        assert.equal((await request('/boards/10/viewers/2', { actor: alice, method: 'DELETE' })).status, 500);
+        assert.equal((await request('/boards/10/viewers', { actor: alice, method: 'POST', body: { username: 'user3' } })).status, 500);
+        assert.ok(boardViewers.has('10:2'));
+        assert.ok(!boardViewers.has('10:3'));
+    } finally { failSharing = false; boards[0] = original; boardViewers.clear(); }
+});
+
+test('owners can upload to semi-private boards using the legacy private pin enum', async () => {
+    const original = { ...boards[0] };
+    boards[0].visibility = 'semi-private';
+    const form = new FormData();
+    form.set('title', 'Shared original');
+    form.set('link_url', 'https://example.test');
+    form.set('board_id', '10');
+    form.set('image', new Blob(['image'], { type: 'image/png' }), 'test.png');
+    try {
+        const response = await fetch(`${baseUrl}/pins`, { method: 'POST', headers: { Cookie: alice.cookie, 'X-CSRF-TOKEN': alice.token }, body: form });
+        assert.equal(response.status, 201);
+        const result = await response.json();
+        try { assert.equal(writes.at(-1).params[5], 'private'); }
+        finally { fs.unlinkSync(path.join(uploadDirectory, result.fileName)); }
+    } finally { boards[0] = original; }
+});
+
+test('deleting a reference-only shared board removes its grants without affecting other grants', async () => {
+    boards.push({ board_id: 33, user_id: 1, visibility: 'semi-private' });
+    boardViewers.add('33:2');
+    boardViewers.add('10:2');
+    try {
+        assert.equal((await request('/boards/33', { actor: alice, method: 'DELETE' })).status, 204);
+        assert.equal(boardViewers.has('33:2'), false);
+        assert.equal(boardViewers.has('10:2'), true);
+    } finally { boardViewers.clear(); }
 });
