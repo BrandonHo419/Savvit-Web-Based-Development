@@ -908,3 +908,21 @@ test('deleting a reference-only shared board removes its grants without affectin
         assert.equal(boardViewers.has('10:2'), true);
     } finally { boardViewers.clear(); }
 });
+
+test('logout GET preserves authentication; POST requires CSRF and invalidates the old cookie', async () => {
+    const actor = await login(1);
+    const get = await request('/users/logout', { actor });
+    assert.equal(get.status, 302);
+    assert.equal(get.headers.get('location'), '/logout.html');
+    assert.equal((await request('/users/profile', { actor })).status, 200);
+    assert.equal((await request('/users/logout', { actor, method: 'POST', token: bob.token })).status, 403);
+    assert.equal((await request('/users/profile', { actor })).status, 200);
+    const logout = await request('/users/logout', { actor, method: 'POST' });
+    assert.equal(logout.status, 204);
+    assert.match(logout.headers.get('set-cookie'), /connect.sid=;/);
+    for (const url of ['/users/profile', '/pins', '/boards/10', `/uploads/${uploadFilename}`]) {
+        assert.equal((await request(url, { actor })).status, 401);
+    }
+    assert.equal((await request('/users/logout', { actor, method: 'POST' })).status, 403);
+    assert.equal((await request('/users/profile', { actor: bob })).status, 200);
+});

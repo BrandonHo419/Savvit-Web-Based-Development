@@ -1,7 +1,8 @@
 {
   "scripts": {
     "start": "node ./bin/www",
-    "test": "node --test"
+    "test": "node --test",
+    "test:mysql": "node scripts/mysql-integration.cjs"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -462,3 +462,42 @@ Automated tests use database and DOM substitutes, including revocation, inherite
 privacy, owner-only grants, validation, failures, confirmation and duplicate actions.
 The migration, foreign-key cascades and SQL execution still need real MySQL validation;
 browser layout and workflows need the local checks above.
+
+
+### Real MySQL integration checks (Stage 9)
+
+Run `npm run test:mysql` (PowerShell: `npm.cmd run test:mysql`) separately from
+`npm test`. MySQL 8 must be running. The runner reads local `.env` connection
+credentials, but ignores `DB_NAME`: it creates a new random `savvit_test_...`
+database, imports the development schema there, and applies Stage 8's migration
+twice. It never imports into or drops your application database. The account
+needs CREATE/DROP DATABASE plus schema/table privileges for that disposable database.
+Optional TEST_DB_HOST, TEST_DB_PORT, TEST_DB_USER and TEST_DB_PASSWORD override
+connection credentials. Do not commit credentials.
+
+Checks execute real controllers and authorization middleware against MySQL, covering
+sharing/revocation, saved references, counts/thumbnails, upload authorization,
+original-pin deletion blocking, reference-only board deletion and grant cascades.
+A queued pin write must reject a destination deleted under the board lock. A failed
+write must roll back. These are not browser or HTTP/session tests; those remain
+covered separately by the ordinary substitute-backed suite and manual checks.
+
+The runner drops only the randomly named database it successfully created, in a
+finally block on success or failure. An existing database is never reused. A hard
+process termination or lost connection may leave the disposable database behind;
+inspect any leftover before removing it manually. No dependencies or CI changes.
+
+
+### Logout (Stage 10)
+
+Logout navigation opens `/logout.html` for confirmation. `GET /users/logout`
+redirects there without changing the session. `POST /users/logout` requires the
+session CSRF token, logs out through Passport, destroys the session and clears
+its cookie only after success (204). Session errors return 500; the interface
+shows failure rather than redirecting. Existing callers that used GET to perform
+logout must switch to POST. No schema or dependency changes.
+
+Verify locally: cancel once, confirm logout, then reload protected content in
+another tab of the same browser. It must require login. A separate browser
+profile remains signed in. Browser history may retain already-rendered content;
+server requests using the old session must be denied.

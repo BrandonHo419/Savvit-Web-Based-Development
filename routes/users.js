@@ -199,19 +199,9 @@ router.get('/home', (req, res) => {
   res.sendStatus(200);
 });
 
-/* Logout route */
-router.get('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) {
-      return res.status(500).send("Failed to logout");
-    }
-
-    req.session.destroy(() => {
-      res.clearCookie('connect.sid');
-      res.sendStatus(200);
-    });
-  });
-});
+// GET is navigation only; POST is protected by the application's CSRF middleware.
+router.get('/logout', (req, res) => res.redirect('/logout.html'));
+router.post('/logout', require('../controllers/logoutController'));
 
 /* GET users listing - default test */
 router.get('/', (req, res) => {
