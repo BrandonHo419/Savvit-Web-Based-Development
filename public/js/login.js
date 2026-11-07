@@ -23,78 +23,54 @@ function getSignupErrors(password, repeatedPassword, email) {
     return errors;
 }
 
-form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    let errors = [];
+const submitButton = form.querySelector('[type="submit"]');
+let csrfRequest;
 
-    if (usernameInput) { // In Sign Up Page
-        errors = getSignupErrors(
-            passwordInput.value,
-            repeatedPasswordInput.value,
-            emailInput.value
-        );
-
-        // If there are errors
-        if (errors.length > 0) {
-            errorMessage.innerText = errors.join(" ");
-            return;
-        }
-
-        const xhttp = new XMLHttpRequest();
-
-        xhttp.onreadystatechange = function () {
-            if (this.readyState === 4) {
-                if (this.status === 200) {
-    const response = JSON.parse(this.responseText);
-
-    localStorage.setItem('csrfToken', response.csrfToken);
-
-    window.location.href = response.redirect;
-} else {
-    errorMessage.innerText = this.responseText;
+function getCsrfToken() {
+    if (!csrfRequest) {
+        csrfRequest = fetch('/users/csrf', { credentials: 'same-origin', cache: 'no-store' })
+            .then(async response => {
+                if (!response.ok) throw new Error('Unable to prepare the form. Please retry.');
+                const result = await response.json();
+                if (typeof result.csrfToken !== 'string' || !/^[a-f0-9]{64}$/.test(result.csrfToken)) {
+                    throw new Error('Unable to prepare the form. Please retry.');
+                }
+                return result.csrfToken;
+            })
+            .finally(() => { csrfRequest = undefined; });
+    }
+    return csrfRequest;
 }
-            }
-        };
 
-        // Initiate connection
-        xhttp.open("POST", "/users/signup", true);
+// Preload on form opening and share any in-flight bootstrap with submission.
+getCsrfToken().catch(error => { errorMessage.innerText = error.message; });
 
-        xhttp.setRequestHeader("Content-type", "application/json");
-        const csrfToken = localStorage.getItem('csrfToken');
-        if (csrfToken) {
-            xhttp.setRequestHeader('X-CSRF-TOKEN', csrfToken);
-        }
-
-        xhttp.send(JSON.stringify({
-            username: usernameInput.value,
-            email: emailInput.value,
-            password: passwordInput.value
-        }));
-    } else { // Else in Login Page
-        const xhttp = new XMLHttpRequest();
-
-        xhttp.onreadystatechange = function () {
-            if (this.readyState === 4) {
-                if (this.status === 200) {
-                    const response = JSON.parse(this.responseText);
-
-                    localStorage.setItem('csrfToken', response.csrfToken);
-
-                    window.location.href = response.redirect;
-            } else {
-                    errorMessage.innerText = this.responseText;
-            }
-            }
-        };
-
-        // Initiate connection
-        xhttp.open("POST", "/users/login", true);
-
-        xhttp.setRequestHeader("Content-type", "application/json");
-
-        xhttp.send(JSON.stringify({
-            email: emailInput.value,
-            password: passwordInput.value
-        }));
+form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (submitButton.disabled) return;
+    if (usernameInput) {
+        const errors = getSignupErrors(passwordInput.value, repeatedPasswordInput.value, emailInput.value);
+        if (errors.length) { errorMessage.innerText = errors.join(' '); return; }
+    }
+    submitButton.disabled = true;
+    errorMessage.innerText = '';
+    try {
+        const csrfToken = await getCsrfToken();
+        const body = { email: emailInput.value, password: passwordInput.value };
+        if (usernameInput) body.username = usernameInput.value;
+        const response = await fetch(usernameInput ? '/users/signup' : '/users/login', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify(body)
+        });
+        if (response.status === 403) throw new Error('Your form session changed or expired. Please submit again.');
+        if (response.status === 401 && !usernameInput) throw new Error('Incorrect email or password.');
+        if (!response.ok) throw new Error(await response.text() || 'Unable to complete this request.');
+        const result = await response.json();
+        window.location.href = result.redirect;
+    } catch (error) {
+        errorMessage.innerText = error.message || 'Unable to connect. Please retry.';
+    } finally {
+        submitButton.disabled = false;
     }
 });

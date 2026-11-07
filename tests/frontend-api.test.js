@@ -70,3 +70,72 @@ test('board initialization waits for the profile and redirects an anonymous sess
         global.window = originalWindow;
     }
 });
+
+async function loadApi(fetchImpl, label) {
+    const vm = require('node:vm');
+    const source = (await readFile(path.join(__dirname, '../public/js/api.js'), 'utf8')).replace(/^export /gm, '');
+    const context = vm.createContext({ fetch: fetchImpl, Headers });
+    vm.runInContext(source, context, { filename: label });
+    return context;
+}
+
+test('session lookup recovers from network, HTTP, parse and anonymous results', async () => {
+    for (const mode of ['network', 'http', 'parse', 'anonymous']) {
+        let calls = 0;
+        const api = await loadApi(async () => {
+            if (++calls > 1) return Response.json({ csrfToken: 'fresh' });
+            if (mode === 'network') throw Error('offline');
+            if (mode === 'http') return new Response('', { status: 500 });
+            if (mode === 'parse') return new Response('invalid JSON');
+            return new Response('', { status: 401 });
+        }, mode);
+        if (mode === 'anonymous') assert.equal(await api.getSession(), null);
+        else await assert.rejects(api.getSession());
+        assert.equal((await api.getSession()).csrfToken, 'fresh');
+        assert.equal(calls, 2);
+    }
+});
+
+test('401 and 403 invalidate session for the next action without replaying a mutation', async () => {
+    for (const status of [401, 403]) {
+        let profiles = 0;
+        const tokens = [];
+        const api = await loadApi(async (url, options) => {
+            if (url === '/users/profile') return Response.json({ csrfToken: `token-${++profiles}` });
+            tokens.push(options.headers.get('X-CSRF-TOKEN'));
+            return new Response('', { status });
+        }, 'invalidation');
+        assert.equal((await api.apiFetch('/boards/1', { method: 'DELETE' })).status, status);
+        assert.deepEqual(tokens, ['token-1']);
+        await api.apiFetch('/boards/1', { method: 'DELETE' });
+        assert.deepEqual(tokens, ['token-1', 'token-2']);
+    }
+});
+
+test('stale failures cannot discard a newer profile request', async () => {
+    let rejectOld;
+    let calls = 0;
+    const api = await loadApi(() => ++calls === 1 ? new Promise((resolve, reject) => { rejectOld = reject; })
+        : Promise.resolve(Response.json({ csrfToken: 'new' })), 'stale');
+    const old = api.getSession();
+    assert.equal((await api.getSession({ refresh: true })).csrfToken, 'new');
+    rejectOld(Error('old request failed'));
+    await assert.rejects(old);
+    assert.equal((await api.getSession()).csrfToken, 'new');
+    assert.equal(calls, 2);
+});
+
+test('a delayed mutation rejection does not invalidate a newer session', async () => {
+    let finishMutation;
+    let calls = 0;
+    const api = await loadApi(url => url === '/users/profile'
+        ? Promise.resolve(Response.json({ csrfToken: `token-${++calls}` }))
+        : new Promise(resolve => { finishMutation = resolve; }), 'delayed');
+    const mutation = api.apiFetch('/boards/1', { method: 'DELETE' });
+    await new Promise(resolve => setImmediate(resolve));
+    await api.getSession({ refresh: true });
+    finishMutation(new Response('', { status: 403 }));
+    await mutation;
+    assert.equal((await api.getSession()).csrfToken, 'token-2');
+    assert.equal(calls, 2);
+});

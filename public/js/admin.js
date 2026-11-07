@@ -1,5 +1,6 @@
+import { apiFetch, getSession } from './api.js';
+
 document.addEventListener("DOMContentLoaded", () => {
-    const logOutButton = document.getElementById('logOutButton');
     const toggleButtonAdd = document.getElementById('toggleBtnAdd');
     const addUserFormAdd = document.getElementById('singleUserFormAdd');
     const delUserFormDel = document.getElementById('singleUserFormDel');
@@ -90,74 +91,51 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // ADD USER
-    addUserFormAdd.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const xhttp = new XMLHttpRequest();
-
-        xhttp.onreadystatechange = function () {
-            if (this.readyState === 4) {
-                if (this.status === 200) {
-                    addUserFormAdd.reset();
-                    addUserFormAdd.style.display = 'none';
-                    errorMessage.innerText = "";
-                    retrieveUserTable();
-                } else if (this.status === 401) {
-                    window.location.href = "/login.html";
-                } else {
-                    errorMessage.innerText = this.responseText;
-                }
+    // Refresh the session immediately before admin mutations; never replay failures.
+    async function submitAdmin(form, message, url, body, onSuccess) {
+        if (form.dataset.pending === 'true') return;
+        form.dataset.pending = 'true';
+        const button = form.querySelector('[type="submit"]');
+        button.disabled = true;
+        message.innerText = '';
+        try {
+            const session = await getSession({ refresh: true });
+            if (!session) { window.location.href = '/login.html'; return; }
+            const response = await apiFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            });
+            if (response.status === 401) {
+                window.location.href = '/login.html';
+                return;
             }
-        };
-
-        // Initiate connection
-        xhttp.open("POST", "/users/admin_add_user", true);
-
-        xhttp.setRequestHeader("Content-type", "application/json");
-        const csrfToken = localStorage.getItem('csrfToken');
-        if (csrfToken) {
-            xhttp.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+            if (!response.ok) throw new Error(await response.text() || 'Unable to complete this action.');
+            onSuccess();
+            retrieveUserTable();
+        } catch (error) {
+            message.innerText = error.message || 'Unable to complete this action. Please retry.';
+        } finally {
+            form.dataset.pending = 'false';
+            button.disabled = false;
         }
+    }
 
-        xhttp.send(JSON.stringify({
-            username: usernameInput.value,
-            email: emailInput.value,
-            password: passwordInput.value,
-            role: roleInput.value
-        }));
+    addUserFormAdd.addEventListener('submit', (event) => {
+        event.preventDefault();
+        return submitAdmin(addUserFormAdd, errorMessage, '/users/admin_add_user', {
+            username: usernameInput.value, email: emailInput.value,
+            password: passwordInput.value, role: roleInput.value
+        }, () => {
+            addUserFormAdd.reset();
+            addUserFormAdd.style.display = 'none';
+        });
     });
 
-    // DELETE USER
-    delUserFormDel.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const xhttp = new XMLHttpRequest();
-
-        xhttp.onreadystatechange = function () {
-            if (this.readyState === 4) {
-                if (this.status === 200) {
-                    delUserFormDel.reset();
-                    deleteMessage.innerText = "";
-                    retrieveUserTable();
-                } else if (this.status === 401) {
-                    window.location.href = "/login.html";
-                } else {
-                    deleteMessage.innerText = this.responseText;
-                }
-            }
-        };
-
-        // Initiate connection
-        xhttp.open("POST", "/users/admin_del_user", true);
-
-        xhttp.setRequestHeader("Content-type", "application/json");
-        const csrfToken = localStorage.getItem('csrfToken');
-        if (csrfToken) {
-            xhttp.setRequestHeader('X-CSRF-TOKEN', csrfToken);
-        }
-
-        xhttp.send(JSON.stringify({
+    delUserFormDel.addEventListener('submit', (event) => {
+        event.preventDefault();
+        return submitAdmin(delUserFormDel, deleteMessage, '/users/admin_del_user', {
             user_id: deleteInput.value
-        }));
+        }, () => delUserFormDel.reset());
     });
 
     /*
@@ -182,20 +160,4 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     */
 
-    logOutButton.addEventListener("click", () => { // If log out clicked
-        const xhttp = new XMLHttpRequest();
-
-        xhttp.onreadystatechange = function () {
-            if (this.readyState === 4) {
-                if (this.status === 200) {
-                    window.location.href = "/login.html";
-                }
-            }
-        };
-
-        // Initiate connection
-        xhttp.open("GET", "/users/logout", true);
-
-        xhttp.send();
-    });
 });

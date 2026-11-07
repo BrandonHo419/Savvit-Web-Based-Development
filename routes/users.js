@@ -2,8 +2,12 @@ const bcrypt = require('bcrypt');
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
-const crypto = require('crypto');
+const { completeLogin } = require('../middleware/sessionLifecycle');
+const { validateLogin, validateRegistration } = require('../middleware/authInput');
 const { requireAdmin, validId } = require('../middleware/authorization');
+
+// Explicit bootstrap: ordinary anonymous pages still create no stored session.
+router.get('/csrf', require('../controllers/csrfController'));
 
 // Reusable user creation function
 async function createUser(req, res, { autoLogin = false }) {
@@ -62,12 +66,8 @@ async function createUser(req, res, { autoLogin = false }) {
       return res.sendStatus(500);
     }
 
-    const csrfToken = crypto.randomBytes(32).toString('hex');
-    req.session.csrfToken = csrfToken;
-
-    return res.status(200).json({
+    return completeLogin(req, res, {
       message: 'Account created successfully',
-      csrfToken: csrfToken,
       redirect: '/home.html'
     });
   });
@@ -80,24 +80,20 @@ async function createUser(req, res, { autoLogin = false }) {
 }
 
 /* Register a new user into the database */
-router.post('/signup', async (req, res) => {
+router.post('/signup', validateRegistration, async (req, res) => {
   await createUser(req, res, { autoLogin: true });
 });
 
 /* Login route */
-router.post('/login', passport.authenticate('local'), (req, res) => {
+router.post('/login', validateLogin, passport.authenticate('local'), (req, res) => {
   req.session.user = {
     username: req.user.username,
     email: req.user.email
   };
 
   const redirectPath = req.user.role === 'admin' ? '/admin.html' : '/home.html';
-  const csrfToken = crypto.randomBytes(32).toString('hex');
-  req.session.csrfToken = csrfToken;
-
-  res.status(200).json({
+  completeLogin(req, res, {
     message: "logged in",
-    csrfToken: csrfToken,
     redirect: redirectPath
   });
 });
@@ -143,7 +139,7 @@ router.get('/user_info', requireAdmin, (req, res) => {
 });
 
 /* Add user from admin interface */
-router.post('/admin_add_user', requireAdmin, async (req, res) => {
+router.post('/admin_add_user', requireAdmin, validateRegistration, async (req, res) => {
   await createUser(req, res, { autoLogin: false });
 });
 

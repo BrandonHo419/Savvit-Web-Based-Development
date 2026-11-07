@@ -26,6 +26,11 @@ const pins = boards.map(b => ({
     pin_id: b.board_id * 10, board_id: b.board_id, user_id: b.user_id,
     image_url: `/uploads/${b.board_id}.png`
 }));
+const imageFixtures = require('./image-fixtures.cjs');
+const validPng = imageFixtures.png;
+let failPinInsert = false;
+let missingDeletionLock = false;
+let failPinDeletion = false;
 const writes = [];
 const savedPins = new Set();
 let failSaveEngagement = false;
@@ -47,6 +52,7 @@ let failUserLookup = false;
 
 async function query(sql, params = []) {
     const q = sql.replace(/\s+/g, ' ').trim();
+    if (failPinInsert && q.startsWith('INSERT INTO pins')) throw new Error('Simulated pin insert failure');
     if (failLookup) throw new Error('Simulated database outage');
     if (q.startsWith('SELECT b.board_id, b.name, b.description, u.username AS owner_name')) {
         assert.match(q, /WHERE b.visibility = 'public' AND LOCATE\(\?, b.name\) > 0/);
@@ -83,6 +89,13 @@ async function query(sql, params = []) {
         throw new Error(`Unexpected sharing query: ${q}`);
     }
     if (q.startsWith('SELECT user_id FROM users WHERE CAST(username AS BINARY)')) return [users.filter(u => u.username === params[0])];
+    if (failPinDeletion && q === 'DELETE FROM image_metadata WHERE pin_id = ?') throw new Error('Private SQL failure');
+    if (q.startsWith('SELECT p.pin_id FROM pins p JOIN boards b')) {
+        if (missingDeletionLock) return [[]];
+        assert.match(q, /p.user_id = \? AND b.user_id = \? FOR UPDATE$/);
+        return [pins.filter(p => p.pin_id === Number(params[0]) && p.user_id === params[1]
+            && boards.some(b => b.board_id === p.board_id && b.user_id === params[2]))];
+    }
     if (q === 'SELECT board_id FROM boards WHERE board_id = ? AND user_id = ? FOR UPDATE') {
         return [missingLockedBoard ? [] : boards.filter(b => b.board_id === Number(params[0]) && b.user_id === params[1])];
     }
@@ -227,7 +240,15 @@ let alice;
 let bob;
 let admin;
 
-async function request(path, { actor, method = 'GET', body, token = actor?.token } = {}) {
+async function request(path, { actor, method = 'GET', body, token = actor?.token, authCsrf = true } = {}) {
+    // Normal credential tests perform the same bootstrap as the browser form.
+    // Negative CSRF tests opt out explicitly.
+    if (authCsrf && method === 'POST' && ['/users/login', '/users/signup'].includes(path)) {
+        const bootstrap = await request('/users/csrf', { actor });
+        const cookie = bootstrap.headers.getSetCookie().at(-1)?.split(';')[0] || actor?.cookie;
+        token = (await bootstrap.json()).csrfToken;
+        actor = { cookie, token };
+    }
     const headers = {};
     if (actor) headers.Cookie = actor.cookie;
     if (token) headers['X-CSRF-TOKEN'] = token;
@@ -247,7 +268,7 @@ async function login(id) {
 
 before(async () => {
     fs.mkdirSync(uploadDirectory, { recursive: true });
-    fs.writeFileSync(uploadPath, 'private test image', { flag: 'wx' });
+    fs.writeFileSync(uploadPath, validPng, { flag: 'wx' });
     server = await new Promise((resolve, reject) => {
         const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
         listener.once('error', reject);
@@ -361,7 +382,7 @@ test('multipart pins use session ownership and clean up rejected foreign-board u
         form.set('link_url', 'https://example.test');
         form.set('board_id', String(boardId));
         form.set('user_id', '2');
-        form.set('image', new Blob(['test image'], { type: 'image/png' }), 'test.png');
+        form.set('image', new Blob([validPng], { type: 'image/png' }), 'test.png');
         const count = writes.length;
         const response = await fetch(`${baseUrl}/pins`, {
             method: 'POST', headers: { Cookie: alice.cookie, 'X-CSRF-TOKEN': alice.token }, body: form
@@ -417,7 +438,7 @@ test('private upload URLs reject other accounts before static delivery', async (
     const url = `/uploads/${uploadFilename}`;
     const response = await request(url, { actor: alice });
     assert.equal(response.status, 200);
-    assert.equal(await response.text(), 'private test image');
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), validPng);
     assert.match(response.headers.get('cache-control'), /no-store/);
     for (const candidate of [url, `/%75ploads/${uploadFilename}`, `/uploads%2F${uploadFilename}`]) {
         assert.equal((await request(candidate, { actor: bob })).status, 404, candidate);
@@ -761,7 +782,7 @@ test('upload is cleaned up if the destination disappears before its locked reche
     form.set('title', 'Uploaded pin');
     form.set('link_url', 'https://example.test');
     form.set('board_id', '10');
-    form.set('image', new Blob(['test image'], { type: 'image/png' }), 'test.png');
+    form.set('image', new Blob([validPng], { type: 'image/png' }), 'test.png');
     try {
         missingLockedBoard = true;
         const response = await fetch(`${baseUrl}/pins`, {
@@ -888,7 +909,7 @@ test('owners can upload to semi-private boards using the legacy private pin enum
     form.set('title', 'Shared original');
     form.set('link_url', 'https://example.test');
     form.set('board_id', '10');
-    form.set('image', new Blob(['image'], { type: 'image/png' }), 'test.png');
+    form.set('image', new Blob([validPng], { type: 'image/png' }), 'test.png');
     try {
         const response = await fetch(`${baseUrl}/pins`, { method: 'POST', headers: { Cookie: alice.cookie, 'X-CSRF-TOKEN': alice.token }, body: form });
         assert.equal(response.status, 201);
@@ -925,4 +946,251 @@ test('logout GET preserves authentication; POST requires CSRF and invalidates th
     }
     assert.equal((await request('/users/logout', { actor, method: 'POST' })).status, 403);
     assert.equal((await request('/users/profile', { actor: bob })).status, 200);
+});
+
+async function postImage(bytes, { name = 'test.png', type = 'image/png', title = 'Upload', extra = false, token = alice.token, cookie = alice.cookie } = {}) {
+    const form = new FormData();
+    form.set('title', title);
+    form.set('link_url', 'https://example.test');
+    form.set('board_id', '10');
+    form.set('image', new Blob([bytes], { type }), name);
+    if (extra) form.append('image', new Blob([validPng], { type: 'image/png' }), 'second.png');
+    return fetch(`${baseUrl}/pins`, { method: 'POST', headers: { Cookie: cookie, 'X-CSRF-TOKEN': token }, body: form });
+}
+
+test('upload rejection returns JSON and leaves no new files or pin writes', async () => {
+    const beforeFiles = fs.readdirSync(uploadDirectory).sort();
+    const beforeWrites = writes.length;
+    for (const [bytes, options, status] of [
+        [Buffer.alloc(0), {}, 415],
+        [Buffer.from('<svg/>'), { name: 'image.svg', type: 'image/svg+xml' }, 415],
+        [Buffer.from('<html>not an image</html>'), {}, 415],
+        [validPng, { name: 'image.jpg', type: 'image/jpeg' }, 415],
+        [validPng, { type: 'image/jpeg' }, 415],
+        [validPng, { name: 'image.html' }, 415],
+        [validPng, { extra: true }, 400],
+        [validPng, { title: '' }, 400],
+        [Buffer.alloc(10_000_001), {}, 413],
+        [Buffer.alloc(10_000_002), {}, 413],
+        [validPng, { token: 'wrong' }, 403]
+    ]) {
+        const response = await postImage(bytes, options);
+        assert.equal(response.status, status);
+        // Global CSRF errors retain their existing text response.
+        if (status !== 403) assert.equal(typeof (await response.json()).error, 'string');
+        assert.deepEqual(fs.readdirSync(uploadDirectory).sort(), beforeFiles);
+        assert.equal(writes.length, beforeWrites);
+    }
+});
+
+test('image size boundary is inclusive and concurrent uploads have distinct controlled names', async () => {
+    const boundary = Buffer.alloc(10_000_000);
+    validPng.copy(boundary);
+    const results = [];
+    try {
+        for (const response of await Promise.all([
+            postImage(boundary), postImage(validPng),
+            postImage(validPng, { name: 'UPPER.PNG', type: 'application/octet-stream' })
+        ])) {
+            assert.equal(response.status, 201);
+            results.push(await response.json());
+        }
+        assert.equal(new Set(results.map(result => result.fileName)).size, 3);
+        for (const result of results) assert.match(result.fileName, /^[0-9a-f-]{36}\.png$/);
+        assert.equal(fs.statSync(path.join(uploadDirectory, results[0].fileName)).size, 10_000_000);
+    } finally {
+        for (const result of results) fs.unlinkSync(path.join(uploadDirectory, result.fileName));
+    }
+});
+
+test('failed pin insertion cleans up the image without exposing database errors', async () => {
+    const beforeFiles = fs.readdirSync(uploadDirectory).sort();
+    try {
+        failPinInsert = true;
+        const response = await postImage(validPng);
+        assert.equal(response.status, 500);
+        assert.deepEqual(await response.json(), { error: 'Failed to create pin' });
+        assert.deepEqual(fs.readdirSync(uploadDirectory).sort(), beforeFiles);
+    } finally { failPinInsert = false; }
+});
+
+test('protected image delivery uses image MIME, no-store and nosniff headers', async () => {
+    const response = await request(`/uploads/${uploadFilename}`, { actor: alice });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /image\/png/);
+    assert.match(response.headers.get('cache-control'), /no-store/);
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+});
+
+test('JPEG and WebP uploads preserve bytes and receive controlled extensions', async () => {
+    for (const [format, name, type, extension] of [
+        ['jpeg', 'photo.jpeg', 'image/jpeg', '.jpg'],
+        ['webp', 'photo.webp', 'image/webp', '.webp']
+    ]) {
+        const response = await postImage(imageFixtures[format], { name, type });
+        assert.equal(response.status, 201);
+        const result = await response.json();
+        const filename = path.join(uploadDirectory, result.fileName);
+        try {
+            assert.equal(path.extname(result.fileName), extension);
+            assert.deepEqual(fs.readFileSync(filename), imageFixtures[format]);
+        } finally { fs.unlinkSync(filename); }
+    }
+});
+
+
+test('pin deletion preserves CSRF and owner checks and handles locked recheck and write failures', async () => {
+    const count = writes.length;
+    assert.equal((await request('/pins/100', { actor: alice, method: 'DELETE', token: 'wrong' })).status, 403);
+    assert.equal((await request('/pins/100', { actor: bob, method: 'DELETE' })).status, 404);
+    try {
+        missingDeletionLock = true;
+        assert.equal((await request('/pins/100', { actor: alice, method: 'DELETE' })).status, 404);
+        assert.equal(writes.length, count);
+    } finally { missingDeletionLock = false; }
+    try {
+        failPinDeletion = true;
+        const response = await request('/pins/100', { actor: alice, method: 'DELETE' });
+        assert.equal(response.status, 500);
+        assert.deepEqual(await response.json(), { error: 'Failed to delete pin' });
+        assert.equal(writes.length, count);
+    } finally { failPinDeletion = false; }
+});
+
+test('malformed login and registration bodies are rejected before credential/database work', async () => {
+    const count = writes.length;
+    try {
+        failUserLookup = true;
+        for (const body of [null, {}, { email: [], password: 'password' }, { email: 'user@example.test', password: {} }]) {
+            assert.equal((await request('/users/login', { method: 'POST', body })).status, 400);
+        }
+    } finally { failUserLookup = false; }
+    for (const body of [{}, { username: 'x', email: 'bad', password: 'password' },
+        { username: 'x', email: 'x@example.test', password: 'short' },
+        { username: 'x', email: 'x@example.test', password: 'é'.repeat(37) }]) {
+        assert.equal((await request('/users/signup', { method: 'POST', body })).status, 400);
+        assert.equal((await request('/users/admin_add_user', { actor: admin, method: 'POST', body })).status, 400);
+    }
+    assert.equal(writes.length, count);
+});
+
+test('user responses are no-store for anonymous, privileged, validation and CSRF outcomes', async () => {
+    for (const [url, options, status] of [
+        ['/users/profile', {}, 401],
+        ['/users/profile', { actor: alice }, 200],
+        ['/users/user_info', { actor: admin }, 200],
+        ['/users/user_info', { actor: alice }, 403],
+        ['/users/login', { method: 'POST', body: {} }, 400],
+        ['/users/signup', { method: 'POST', body: {} }, 400],
+        ['/users/admin_add_user', { actor: admin, method: 'POST', token: 'wrong', body: {} }, 403]
+    ]) {
+        const response = await request(url, options);
+        assert.equal(response.status, status);
+        assert.match(response.headers.get('cache-control'), /private, no-store/);
+    }
+});
+
+test('valid signup and admin creation retain success responses and ignore role escalation', async () => {
+    for (const [url, actor] of [['/users/signup', undefined], ['/users/admin_add_user', admin]]) {
+        const response = await request(url, { actor, method: 'POST', body: {
+            username: 'newuser', email: 'newuser@example.test', password: 'test-password-only', role: 'admin'
+        } });
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('cache-control'), /no-store/);
+        const result = await response.json();
+        if (!actor) {
+            assert.equal(result.redirect, '/home.html');
+            assert.match(result.csrfToken, /^[a-f0-9]{64}$/);
+        } else assert.equal(result.user_id, 900);
+        assert.equal(writes.at(-1).params[3], 'user');
+    }
+});
+
+test('anonymous browsing and rejected credentials do not create session cookies', async () => {
+    for (const [url, options] of [['/landingpage.html', {}], ['/users/profile', {}],
+        ['/users/login', { method: 'POST', body: { email: 'user1@example.test', password: 'incorrect' } }]]) {
+        const response = await request(url, options);
+        assert.equal(response.headers.get('set-cookie'), null);
+    }
+});
+
+test('absolute session expiry blocks mutations at eight hours while other sessions remain usable', async () => {
+    const actor = await login(1);
+    const originalNow = Date.now;
+    const now = Date.now();
+    const count = writes.length;
+    try {
+        Date.now = () => now + 8 * 60 * 60 * 1000 - 1000;
+        assert.equal((await request('/users/profile', { actor })).status, 200);
+        Date.now = () => now + 8 * 60 * 60 * 1000;
+        const expired = await request('/pins/100', { actor, method: 'DELETE' });
+        // MemoryStore may evict first, leaving the existing anonymous-CSRF 403.
+        assert.ok([401, 403].includes(expired.status));
+        if (expired.status === 401) assert.match(expired.headers.get('set-cookie'), /connect.sid=;/);
+        assert.equal(writes.length, count);
+        for (const url of ['/users/profile', '/boards/10', '/pins', `/uploads/${uploadFilename}`]) {
+            assert.equal((await request(url, { actor })).status, 401);
+        }
+        assert.equal((await request('/landingpage.html', { actor })).status, 200);
+    } finally { Date.now = originalNow; }
+    assert.equal((await request('/users/profile', { actor: bob })).status, 200);
+    const fresh = await login(1);
+    assert.equal((await request('/users/profile', { actor: fresh })).status, 200);
+});
+
+test('login accepts an expired cookie and replaces it with a new authenticated session', async () => {
+    const actor = await login(1);
+    const originalNow = Date.now;
+    const now = Date.now();
+    try {
+        Date.now = () => now + 8 * 60 * 60 * 1000;
+        const response = await request('/users/login', { actor, method: 'POST', body: {
+            email: 'user1@example.test', password
+        } });
+        assert.equal(response.status, 200);
+        const cookies = response.headers.getSetCookie();
+        const newCookie = cookies.at(-1).split(';')[0];
+        assert.notEqual(newCookie, actor.cookie);
+        assert.match(cookies.at(-1), /Expires=/);
+        assert.equal((await request('/users/profile', { actor: { cookie: newCookie } })).status, 200);
+    } finally { Date.now = originalNow; }
+});
+
+test('credential routes reject missing, wrong and foreign-session CSRF tokens', async () => {
+    const first = await request('/users/csrf');
+    const second = await request('/users/csrf');
+    const actor = { cookie: first.headers.getSetCookie().at(-1).split(';')[0] };
+    const ownToken = (await first.json()).csrfToken;
+    const foreignToken = (await second.json()).csrfToken;
+    assert.notEqual(ownToken, foreignToken);
+    const count = writes.length;
+    for (const url of ['/users/login', '/users/signup']) {
+        for (const token of [undefined, 'incorrect', foreignToken]) {
+            const response = await request(url, { actor, method: 'POST', token, authCsrf: false, body: {
+                username: 'csrf-test', email: users[0].email, password
+            } });
+            assert.equal(response.status, 403);
+            assert.match(response.headers.get('cache-control'), /no-store/);
+        }
+    }
+    assert.equal(writes.length, count);
+    assert.equal((await request('/users/profile', { actor })).status, 401);
+});
+
+test('CSRF bootstrap is stable and login replaces both anonymous cookie and token', async () => {
+    const bootstrap = await request('/users/csrf');
+    const anonymous = { cookie: bootstrap.headers.getSetCookie().at(-1).split(';')[0], token: (await bootstrap.json()).csrfToken };
+    assert.match(anonymous.token, /^[a-f0-9]{64}$/);
+    assert.match(bootstrap.headers.get('cache-control'), /no-store/);
+    assert.equal(bootstrap.headers.get('access-control-allow-origin'), null);
+    assert.equal((await (await request('/users/csrf', { actor: anonymous })).json()).csrfToken, anonymous.token);
+    const response = await request('/users/login', { actor: anonymous, authCsrf: false, method: 'POST', body: { email: users[0].email, password } });
+    assert.equal(response.status, 200);
+    const actor = { cookie: response.headers.getSetCookie().at(-1).split(';')[0], token: (await response.json()).csrfToken };
+    assert.notEqual(actor.cookie, anonymous.cookie);
+    assert.notEqual(actor.token, anonymous.token);
+    assert.equal((await request('/users/profile', { actor: anonymous })).status, 401);
+    assert.equal((await request('/users/csrf', { actor }).then(r => r.json())).csrfToken, actor.token);
+    assert.equal((await request('/boards', { actor, token: anonymous.token, method: 'POST', body: { name: 'Must not create' } })).status, 403);
+    assert.equal((await request('/users/profile', { actor })).status, 200);
 });

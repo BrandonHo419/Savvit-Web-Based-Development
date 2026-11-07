@@ -1,9 +1,7 @@
 // Import required modules
 const express = require('express'); // Web framework for Node.js
 const router = express.Router(); // Create Express router instance
-const multer = require('multer'); // Middleware for handling file uploads
-const { mkdir } = require('node:fs');
-const path = require('path'); // Utility for handling file paths
+const { imageUpload } = require('../middleware/imageUpload');
 
 // Import pin controller for handling route logic
 const pinController = require('../controllers/pinController');
@@ -12,27 +10,8 @@ const ownDestination = boardAccess(req => req.body?.board_id, { ownerOnly: true 
 const readPin = pinAccess(req => req.params.id || req.params.pin_id);
 const ownPin = pinAccess(req => req.params.id, { ownerOnly: true });
 
-// Configure Multer for file uploads
-const storage = multer.diskStorage({
-    // Specify destination folder for uploaded files
-    destination: function (req, file, cb) {
-        const destination = path.join(__dirname, '../public/uploads');
-        mkdir(destination, { recursive: true }, error => cb(error, destination));
-    },
-    // Define filename for uploaded files
-    filename: function (req, file, cb) {
-        // Use file extension or default to .png
-        const ext = path.extname(file.originalname) || '.png';
-        // Generate unique filename using timestamp
-        cb(null, Date.now() + ext);
-    }
-});
-
-// Initialize Multer with storage configuration
-const upload = multer({ storage });
-
-// POST route for creating a new pin with an image upload
-router.post('/', upload.single('image'), ownDestination, pinController.createPin);
+// Parse and validate the upload before checking the multipart destination.
+router.post('/', imageUpload, ownDestination, pinController.createPin);
 
 // Route to get all pins
 router.get('/', pinController.getAllPins);

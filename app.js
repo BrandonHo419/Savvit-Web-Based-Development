@@ -1,4 +1,6 @@
 require('dotenv').config();
+const { sessionOptions, enforceSessionLifetime } = require('./middleware/sessionLifecycle');
+const configuredSession = sessionOptions();
 
 const express = require('express');
 const session = require('express-session');
@@ -52,29 +54,22 @@ const getUserID = (userID) => new Promise((resolve, reject) => {
 createPassport(passport, getUserEmail, getUserID);
 
 app.use(logger('dev'));
+// Include anonymous responses and errors, even those produced before the users router.
+app.use('/users', (req, res, next) => {
+    res.set('Cache-Control', 'private, no-store');
+    next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-app.use(session({
-    secret: process.env.SESSION_SECRET, // stores in env file
-    resave: false,
-    saveUninitialized: true,
-    cookie: {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
-    }
-}));
-
-const csrfExcludeRoutes = ['/users/login', '/users/signup'];
+app.use(session(configuredSession));
+// Expire authenticated sessions before CSRF validation and Passport deserialization.
+app.use(enforceSessionLifetime);
 
 function validateToken(req, res, next) {
     const safeRequests = ['GET', 'HEAD', 'OPTIONS'];
-    // Skip safe methods and skip signup and login page
-    if (
-    safeRequests.includes(req.method)
-    || csrfExcludeRoutes.includes(req.path)) return next();
+    if (safeRequests.includes(req.method)) return next();
 
     const sentToken = req.get('X-CSRF-TOKEN'); // reads token which should include request header
     const sessionToken = req.session.csrfToken; // reads token stored in user's session
@@ -99,6 +94,7 @@ app.use((req, res, next) => {
         return res.status(400).json({ error: 'Invalid path' });
     }
     if (pathname === '/uploads' || pathname.startsWith('/uploads/')) {
+        res.set('X-Content-Type-Options', 'nosniff');
         return privateResponse(req, res, () => requireAuth(req, res, () => uploadAccess(req, res, next)));
     }
     next();

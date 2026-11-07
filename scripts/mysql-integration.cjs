@@ -100,6 +100,54 @@ async function main() {
     await assert.rejects(boardWrite(bid,uid,'INSERT INTO nonexistent_integration_table VALUES (?)',[1]));
     assert.equal((await database.query('SELECT board_id FROM boards WHERE board_id = ?',[bid]))[0].length,1);
     console.log('PASS deleted-destination write recheck and write-failure rollback');
+
+    // Exercise all original-pin dependencies, including a real self-referencing FK.
+    const pinController = require('../controllers/pinController');
+    const [target] = await database.query("INSERT INTO pins (user_id,board_id,title,image_url) VALUES (?,?,'Delete target','/uploads/delete-target.png')", [uid,bid]);
+    const targetId = target.insertId;
+    const [comment] = await database.query("INSERT INTO comments (user_id,pin_id,content) VALUES (?,?,'Target comment')", [uid,targetId]);
+    const [parent] = await database.query("INSERT INTO replies (user_id,comment_id,content) VALUES (?,?,'Parent')", [uid,comment.insertId]);
+    await database.query("INSERT INTO replies (user_id,comment_id,parent_reply_id,content) VALUES (?,?,?,'Child')", [uid,comment.insertId,parent.insertId]);
+    const [category] = await database.query("INSERT INTO categories (name) VALUES ('integration_delete_category')");
+    const [tag] = await database.query("INSERT INTO tags (name) VALUES ('integration_delete_tag')");
+    await database.query('INSERT INTO pin_categories (pin_id,category_id) VALUES (?,?)', [targetId,category.insertId]);
+    await database.query('INSERT INTO pin_tags (pin_id,tag_id) VALUES (?,?)', [targetId,tag.insertId]);
+    await database.query('INSERT INTO image_metadata (pin_id) VALUES (?)', [targetId]);
+    await database.query('INSERT INTO pin_views (pin_id,user_id) VALUES (?,?)', [targetId,vid]);
+    await database.query("INSERT INTO engagements (pin_id,user_id,type) VALUES (?,?,'like')", [targetId,vid]);
+    await database.query('INSERT INTO board_pins (pin_id,board_id) VALUES (?,?)', [targetId,bid]);
+    const dependentTables = ['comments','engagements','board_pins','image_metadata','pin_categories','pin_tags','pin_views'];
+    const snapshot = async () => {
+      const result = {};
+      for (const table of dependentTables) result[table] = (await database.query(`SELECT * FROM ${table} WHERE pin_id = ?`, [targetId]))[0];
+      result.replies = (await database.query('SELECT * FROM replies WHERE comment_id = ? ORDER BY reply_id', [comment.insertId]))[0];
+      result.pin = (await database.query('SELECT * FROM pins WHERE pin_id = ?', [targetId]))[0];
+      return result;
+    };
+    const deleteTarget = user => invoke(pinController.deletePin, { user: { user_id: user }, params: { id: String(targetId) } });
+    assert.equal((await deleteTarget(vid)).code,404);
+    const beforeDelete = await snapshot();
+    // Legacy inconsistent cross-comment children must block deletion, not be erased.
+    const [otherComment] = await database.query("INSERT INTO comments (user_id,pin_id,content) VALUES (?,?,'Keep comment')", [uid,pid]);
+    const [externalChild] = await database.query("INSERT INTO replies (user_id,comment_id,parent_reply_id,content) VALUES (?,?,?,'Keep reply')", [uid,otherComment.insertId,parent.insertId]);
+    const failedDelete = await deleteTarget(uid);
+    assert.equal(failedDelete.code,500);
+    assert.deepEqual(failedDelete.body,{error:'Failed to delete pin'});
+    assert.deepEqual(await snapshot(),beforeDelete);
+    assert.equal((await database.query('SELECT reply_id FROM replies WHERE reply_id = ?', [externalChild.insertId]))[0].length,1);
+    // Repair only the disposable test's deliberately inconsistent relationship.
+    await database.query('UPDATE replies SET parent_reply_id = NULL WHERE reply_id = ?', [externalChild.insertId]);
+    assert.equal((await deleteTarget(uid)).code,200);
+    for (const rows of Object.values(await snapshot())) assert.equal(rows.length,0);
+    assert.equal((await deleteTarget(uid)).code,404);
+    for (const [table,column,id] of [['pins','pin_id',pid],['boards','board_id',bid],
+      ['categories','category_id',category.insertId],['tags','tag_id',tag.insertId],
+      ['replies','reply_id',externalChild.insertId]]) {
+      assert.equal((await database.query(`SELECT * FROM ${table} WHERE ${column} = ?`, [id]))[0].length,1);
+    }
+    assert.equal((await invoke(uploadAccess,{...req(uid),path:'/uploads/delete-target.png'})).code,404);
+    console.log('PASS original-pin dependency deletion, nested replies, FK-failure rollback and retained unrelated records');
+
   } finally {
     if (pool) await pool.end();
     if (database) await database.end();

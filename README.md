@@ -501,3 +501,198 @@ Verify locally: cancel once, confirm logout, then reload protected content in
 another tab of the same browser. It must require login. A separate browser
 profile remains signed in. Browser history may retain already-rendered content;
 server requests using the old session must be denied.
+
+
+### Image upload validation (Stage 11)
+
+Direct pin uploads accept **JPEG (.jpg/.jpeg), PNG and WebP**, up to and including
+**10 MB (10,000,000 bytes)** per image. GIF, SVG, HTML and other formats are rejected.
+Home and Board show the same limits and reject unsuitable selections before upload.
+The server independently checks container signatures, filename extensions and MIME
+claims. Empty or generic MIME declarations are allowed only when extension and
+signature agree. Stored names use random UUIDs and a server-selected extension.
+
+These checks identify image containers; they do **not** fully decode, re-encode,
+scan for malware or limit decoded pixel dimensions. Existing uploads are not
+retroactively validated. Provider URL imports and profile-local previews are not
+file-upload endpoints and are outside this stage.
+
+`POST /pins` retains session, CSRF, destination ownership and transactional board
+rechecks. Multipart uploads are bounded to one file, eight text fields, nine parts
+and 16,384 bytes per text field. Parsing uses temporary disk files, not whole-image
+memory buffers. Rejected uploads and failed pin creations remove their new file;
+cleanup failures return a generic error and are logged server-side. Process crashes
+or filesystem failures can still leave orphan files; no background sweeper is added.
+
+Upload errors return JSON: 400 for missing files/invalid multipart limits or required
+metadata, 413 for oversized files, 415 for unsupported or mismatched content, and
+500 for processing/storage/database failures. Existing authentication, CSRF and
+inaccessible-board responses are preserved. Uploaded content remains protected by
+original-board access, `Cache-Control: private, no-store` and now
+`X-Content-Type-Options: nosniff`; controlled extensions select image MIME types.
+
+Run `npm test` (`npm.cmd test` on Windows). Tests cover real image fixtures,
+exact-limit and oversized uploads, mismatches, duplicate files, ownership, missing
+destinations, database-failure cleanup, concurrent naming, response headers and
+browser validation/stale previews. The size-boundary fixture deliberately pads an
+image to exercise byte limits; acceptance does not imply full decoding validation.
+
+Manual check: upload one of each supported format from Home and Board, reload,
+and view the pin. Try an oversized image and a renamed non-image; verify clear
+errors and retry with a valid image. Confirm another account cannot view a private
+upload. No dependencies, migrations or deployment changes are required.
+
+
+### Transactional original-pin deletion (Stage 12)
+
+`DELETE /pins/:id` retains its owner-only and CSRF-protected interface. It locks
+and rechecks both pin and original-board ownership within one transaction, removes
+reply chains, comments, engagements, saved references, image metadata, category/tag
+memberships and view records, then deletes the original pin and commits. Shared
+category/tag definitions, other pins and boards remain intact. Nested replies are
+detached inside the transaction before deletion to satisfy the self-referencing FK.
+Inconsistent legacy replies from unrelated comments that reference a deleted reply
+block the operation and roll it back; unrelated replies are never silently removed.
+
+Success retains the existing 200 response. Missing/inaccessible pins, including
+those lost at the locked recheck, return 404. SQL failures return a generic 500;
+transaction rollback preserves prior data when the database remains reachable.
+Deadlocks are reported as failures; there is no automatic retry. As with any database
+transaction, connection loss during commit can leave its outcome uncertain; reload
+before retrying. The application cannot promise rollback after a lost connection.
+
+Uploaded files are deliberately retained on disk. Once the last accessible pin using
+that URL is removed, existing upload authorization denies future requests. This avoids
+irreversible filesystem deletion before database commit and preserves legacy shared
+image URLs. Physical orphan cleanup requires a separate reviewed policy and is not
+part of Stage 12. Already downloaded content cannot be recalled.
+
+Run `npm test` for deterministic route and transaction failure tests. Run
+`npm run test:mysql` separately for real dependency deletion, nested replies, an
+actual foreign-key failure and rollback, repeated deletion, unrelated-record retention
+and upload access revocation. It continues to use only its disposable database.
+
+Manual check with disposable content: save an original to another board, add a
+comment/reply, delete the original and reload both boards. Both memberships and
+its detail endpoint should disappear. Confirm another account cannot delete your
+original and that deleting a saved reference still preserves the original. No
+migration, dependency, CI or frontend change is required.
+
+
+### Authentication recovery and input validation (Stage 13A)
+
+Session lookups now discard failed requests and anonymous results so a later action
+can try again. API 401/403 responses invalidate the cached session for the next
+request; mutations are **never automatically replayed**. A delayed failure cannot
+clear a newer refresh. Admin create/delete actions obtain the current profile/CSRF
+token instead of reading localStorage, prevent duplicate submission and preserve
+form input on errors. The admin page uses a module script; its existing logout
+navigation remains the confirmation page.
+
+All `/users` responses set `Cache-Control: private, no-store`, including anonymous,
+validation and CSRF-error responses. This governs HTTP caching; it does not promise
+to erase already-rendered pages or content restored from browser history.
+
+Signup and admin account creation validate fields before bcrypt/database work:
+- Username: nonblank string, at most 100 Unicode code points.
+- Email: basic address syntax, at most 255 Unicode code points; no whitespace.
+- Password: at least eight Unicode code points, at most 72 UTF-8 bytes, avoiding
+  bcrypt's truncation of new passwords. Passwords are never trimmed or normalized.
+
+Credentials are not silently rewritten. Login requires a nonblank email string of
+at most 255 code points and a nonempty password string, but does not apply the new
+registration password policy to existing accounts. Invalid input returns 400 with
+text suitable for the existing forms. Account roles remain server-controlled.
+
+Run `npm test` for route, boundary, cache recovery/race and admin-interface tests.
+Manual checks: create a disposable account; log in/out; verify admin creation/deletion
+with an obsolete localStorage token; interrupt a profile request and retry; verify
+failed actions do not reset form input or run twice. Client-side forms may still
+submit values rejected by the stricter server validation; the server error is shown.
+
+This stage adds no dependencies, migrations, session timeout, persistent store,
+login throttling or new unauthenticated-CSRF mechanism. Those remain separate work.
+
+
+### Absolute session lifetime (Stage 13B)
+
+Login and automatic login after signup establish an **eight-hour absolute session
+lifetime**. Activity does not extend the server-side deadline. The deadline and CSRF
+token are saved before reporting login success. Cookies use the remaining lifetime,
+HttpOnly, SameSite=Strict and Secure in production, with the same options used when
+clearing them on logout/expiry. The application refuses to start if SESSION_SECRET
+is missing, empty or whitespace-only; configure it locally, never commit its value.
+
+Untouched anonymous requests no longer create stored sessions or session cookies.
+Expired authenticated sessions are invalidated before CSRF checks and Passport
+loads the user. Public GET pages remain accessible, and login/signup can establish
+a fresh session on the same request. Authenticated sessions without a valid deadline
+require login again. A session-store error during invalidation returns a generic
+500 without continuing to protected handlers.
+
+Protected reads after expiry return 401. Mutations return 401 if the expiry helper
+invalidates the identity, or the existing CSRF 403 if the store already evicted it.
+Neither executes the requested mutation. Reload and log in again; mutations are not
+automatically replayed. Already-rendered browser content is not erased by expiry.
+Requests that passed the deadline check before expiry may complete afterward.
+
+The default in-memory store remains: restarting the server signs users out, and
+this is not a persistent/multi-instance deployment solution. No new store,
+dependency, schema, proxy setting, login throttling or login/signup CSRF mechanism
+is introduced. Signup account creation is not rolled back if subsequent session
+saving fails; the account may exist and the user can retry through login.
+
+Run `npm test` for startup validation, anonymous-cookie checks, login persistence
+failures, expiry/invalidation failures, HTTP expiry and old-cookie rejection. Tests
+simulate time and expired stored state, so no eight-hour wait is required. Local
+manual checks: log in normally, navigate protected pages, log out and log in again;
+confirm anonymous landing/profile requests do not set a new session cookie. Retain
+manual checks from earlier stages as pending until actually completed.
+
+
+### Login/signup CSRF protection (Stage 13C)
+
+`GET /users/csrf` returns `{ csrfToken }` with `private, no-store` caching. Opening a
+login/signup form calls this endpoint and intentionally creates an anonymous session.
+Ordinary anonymous browsing still creates none. The token is stable within a session;
+successful authentication regenerates the session and replaces its token.
+
+Login and signup now require the same `X-CSRF-TOKEN` header as other mutations.
+External clients must first fetch `/users/csrf`, retain its session cookie, and send
+both the cookie and token with credentials. Missing, wrong or foreign-session tokens
+return 403 before credential validation or account creation. No cross-origin token
+access/CORS allowance is added. Existing authenticated tokens remain usable until
+logout, expiry or session replacement.
+
+The forms fetch a token on opening and before each submission, share an in-flight
+bootstrap, and prevent duplicate submissions. Token/network/authentication errors
+preserve input and require an explicit retry; no credential POST is replayed
+automatically. localStorage tokens are no longer read or written by these forms.
+If another tab changes the session after bootstrap, retrying fetches the current token.
+
+The Stage 13B startup test now stubs dotenv only inside its child process instead of
+relying on DOTENV_CONFIG_PATH, which direct dotenv.config() does not honour. A fixture
+with a valid .env reproduces the original test defect and verifies isolation without
+reading, changing or deleting the developer's .env. Application configuration is unchanged.
+
+Run `npm test`. Manual authentication checks:
+1. Start `npm start`, open a fresh private browser session at `/landingpage.html`,
+   and confirm no connect.sid cookie is created. Open `/login.html`: GET /users/csrf
+   should return 200 and now create a cookie.
+2. Submit a wrong password, then the correct one. Expect an error without navigation,
+   followed by successful login. Network requests should include one POST per attempt
+   and an X-CSRF-TOKEN header; do not share its value.
+3. Create a disposable account from `/signup.html`; confirm automatic login. Try an
+   existing email or a rejected password and confirm an error preserves the fields.
+4. Leave a login form open, stop the server, submit, then restart and submit again.
+   Expect recoverable feedback and then success. Restarting the in-memory store also
+   invalidates other sessions, so perform this before multi-account checks.
+5. Verify a POST to /users/login or /users/signup without X-CSRF-TOKEN returns 403.
+   Use dummy credentials for this negative check; no account should be created.
+6. Verify logout cancellation, successful logout across same-browser tabs and a
+   separate browser profile remaining signed in. Retain Stage 11/12 manual upload,
+   reference and original-deletion checks until completed. Eight-hour expiry is
+   simulated by automated tests; no manual eight-hour wait or system-clock change
+   is required.
+
+No dependencies, migrations, persistent session store or login throttling are added.

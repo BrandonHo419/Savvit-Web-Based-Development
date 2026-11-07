@@ -1,6 +1,7 @@
 const pool = require('../models/db');
 const boardWrite = require('../models/boardWrite');
-const { unlink } = require('node:fs/promises');
+const deleteOwnedPin = require('../models/pinDeletion');
+const { cleanupUpload } = require('../middleware/imageUpload');
 
 function isRemoteImageUrl(value) {
   if (typeof value !== 'string') return false;
@@ -23,17 +24,18 @@ exports.createPin = async (req, res) => {
   // The legacy pin enum stays binary; access is always governed by its original board.
   const visibility = req.accessBoard.visibility === 'public' ? 'public' : 'private';
 
-  if (typeof title !== 'string' || typeof link_url !== 'string' || !title.trim() || !link_url.trim()) {
-    return res.status(400).json({ error: 'Title and link URL are required.' });
-  }
-
-  if (!req.file) {
-    return res.status(400).json({ error: 'No image uploaded.' });
-  }
-
-  const image_url = `/uploads/${req.file.filename}`;
-
   try {
+    if (typeof title !== 'string' || typeof link_url !== 'string' || !title.trim() || !link_url.trim()) {
+      await cleanupUpload(req);
+      return res.status(400).json({ error: 'Title and link URL are required.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image uploaded.' });
+    }
+
+    const image_url = `/uploads/${req.file.filename}`;
+
     const result = await boardWrite(board_id, req.user.user_id,
       `INSERT INTO pins (title, description, image_url, link_url, user_id, visibility, board_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -41,7 +43,7 @@ exports.createPin = async (req, res) => {
     );
 
     if (!result) {
-      await unlink(req.file.path);
+      await cleanupUpload(req);
       return res.status(404).json({ error: 'Destination board not found' });
     }
 
@@ -51,7 +53,10 @@ exports.createPin = async (req, res) => {
       fileName: req.file.filename
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create pin', details: err });
+    try { await cleanupUpload(req); }
+    catch (cleanupError) { console.error('Upload cleanup failed:', cleanupError.code); }
+    console.error('Pin creation failed:', err.code || err.name);
+    res.status(500).json({ error: 'Failed to create pin' });
   }
 };
 
@@ -348,47 +353,14 @@ VALUES (?, ?, ?, ?, ?, ?)`,
   }
 };
 
-// DELETE /pins/:id — Delete a pin
+// DELETE /pins/:id — Delete a pin and its dependent records atomically.
 exports.deletePin = async (req, res) => {
-  const { id } = req.params;
-  const user_id = req.user.user_id;
-
-  if (!user_id) return res.status(400).json({ error: 'Missing user ID' });
-
   try {
-    // Check ownership
-    const [rows] = await pool.query(
-      'SELECT * FROM pins WHERE pin_id = ? AND user_id = ?',
-      [id, user_id]
-    );
-
-    if (rows.length === 0) {
-      return res.status(403).json({ error: 'Unauthorized or pin not found.' });
-    }
-
-    // Step 1: Delete replies of comments related to the pin
-    await pool.query(`
-      DELETE r FROM replies r
-      JOIN comments c ON r.comment_id = c.comment_id
-      WHERE c.pin_id = ?`, [id]);
-
-    // Step 2: Delete comments on the pin
-    await pool.query('DELETE FROM comments WHERE pin_id = ?', [id]);
-
-    // Step 3: Delete engagements and board-pins
-    await pool.query('DELETE FROM engagements WHERE pin_id = ?', [id]);
-    await pool.query('DELETE FROM board_pins WHERE pin_id = ?', [id]);
-
-    // Step 4: Delete the pin itself
-    await pool.query('DELETE FROM pins WHERE pin_id = ?', [id]);
-
+    const deleted = await deleteOwnedPin(req.params.id, req.user.user_id);
+    if (!deleted) return res.status(404).json({ error: 'Resource not found' });
     res.status(200).json({ message: 'Pin deleted successfully.' });
-
   } catch (err) {
-    console.error('Error deleting pin:', err);
-    // Prevent sending multiple responses
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to delete pin', details: err.message });
-    }
+    console.error('Pin deletion failed:', err.code || err.name);
+    res.status(500).json({ error: 'Failed to delete pin' });
   }
 };

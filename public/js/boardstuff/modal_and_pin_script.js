@@ -1,3 +1,4 @@
+import { uploadError } from '../upload-policy.js';
 import { safeHttpUrl } from '../content.js';
 import { apiFetch } from '../api.js';
 
@@ -10,42 +11,59 @@ import { handlePinClick } from './view_modal.js';
 // ----------Image Upload Preview--------------
 document.getElementById('upload_img').addEventListener('change', (event) => {
   const file = event.target.files?.[0];
+  state.uploaded_file = null;
+  state.pin_image_blob = null;
+  document.querySelector('.add_pin_modal .pin_image').replaceChildren();
+  document.querySelector('#upload_img_label').style.display = 'block';
+  event.target.value = '';
+  if (!file) return;
+  const error = uploadError(file);
+  if (error) return alert(error);
   state.uploaded_file = file;
 
-  if (file && file.type.startsWith('image/')) {
-    const reader = new FileReader();
+  const reader = new FileReader();
 
-    reader.onload = function () {
-      const new_image = new Image();
-      new_image.src = reader.result;
-      state.pin_image_blob = reader.result;
+  reader.onerror = () => {
+    if (state.uploaded_file !== file) return;
+    state.uploaded_file = null;
+    alert('Unable to read this image. Please try another file.');
+  };
+  reader.onload = function () {
+    if (state.uploaded_file !== file) return;
+    const new_image = new Image();
+    state.pin_image_blob = reader.result;
 
-      new_image.onload = function () {
-        const image_container = document.querySelector('.add_pin_modal .pin_image');
-        const maxWidth = 400;
-        const aspectRatio = new_image.naturalWidth / new_image.naturalHeight;
-
-        new_image.style.width = `${maxWidth}px`;
-        new_image.style.height = `${maxWidth / aspectRatio}px`;
-        new_image.style.borderRadius = '16px';
-        new_image.style.objectFit = 'cover';
-        new_image.style.display = 'block';
-
-        image_container.innerHTML = '';
-        image_container.appendChild(new_image);
-
-        document.querySelector('#upload_img_label').style.display = 'none';
-
-        const modal = document.querySelector('.add_pin_modal .modal_pin');
-        modal.style.display = 'flex';
-        modal.style.opacity = 1;
-      };
+    new_image.onerror = () => {
+      if (state.uploaded_file !== file) return;
+      state.uploaded_file = null;
+      state.pin_image_blob = null;
+      alert('Unable to display this image. Please try another file.');
     };
+    new_image.onload = function () {
+      if (state.uploaded_file !== file) return;
+      const image_container = document.querySelector('.add_pin_modal .pin_image');
+      const maxWidth = 400;
+      const aspectRatio = new_image.naturalWidth / new_image.naturalHeight;
 
-    reader.readAsDataURL(file);
-  }
+      new_image.style.width = `${maxWidth}px`;
+      new_image.style.height = `${maxWidth / aspectRatio}px`;
+      new_image.style.borderRadius = '16px';
+      new_image.style.objectFit = 'cover';
+      new_image.style.display = 'block';
 
-  event.target.value = ''; // allow re-selecting the same file
+      image_container.innerHTML = '';
+      image_container.appendChild(new_image);
+
+      document.querySelector('#upload_img_label').style.display = 'none';
+
+      const modal = document.querySelector('.add_pin_modal .modal_pin');
+      modal.style.display = 'flex';
+      modal.style.opacity = 1;
+    };
+    new_image.src = reader.result;
+  };
+
+  reader.readAsDataURL(file);
 });
 
 // -----------------Save Pin Button (modal)------------------------
@@ -56,7 +74,8 @@ savePinButton.addEventListener('click', () => {
   const description = document.querySelector('#pin_description').value.trim();
   const link_url = document.querySelector('#pin_destination').value.trim();
 
-  if (!state.uploaded_file) return alert("Please select an image.");
+  const imageError = uploadError(state.uploaded_file);
+  if (imageError) return alert(imageError);
   if (!title || !link_url) return alert("Title and destination are required.");
 
   const boardId = document.getElementById('board_id').value;
