@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const { passwordWork } = require('../middleware/passwordWork');
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
@@ -16,7 +17,7 @@ async function createUser(req, res, { autoLogin = false }) {
   const userPassword = req.body.password;
   const userRole = 'user';
 
-  const hash = await bcrypt.hash(userPassword, 13);
+  const hash = await passwordWork(() => bcrypt.hash(userPassword, 13));
 
   req.pool.getConnection((err, connection) => {
     if (err) {

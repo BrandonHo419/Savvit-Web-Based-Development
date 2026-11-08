@@ -26,10 +26,18 @@ function getSignupErrors(password, repeatedPassword, email) {
 const submitButton = form.querySelector('[type="submit"]');
 let csrfRequest;
 
+function checkCapacity(response) {
+    if (response.status !== 429 && response.status !== 503) return;
+    const seconds = Number(response.headers.get('Retry-After'));
+    const delay = Number.isSafeInteger(seconds) && seconds > 0 ? ` Wait ${seconds} seconds before trying again.` : ' Please try again shortly.';
+    throw new Error((response.status === 429 ? 'Too many attempts.' : 'Authentication is temporarily busy.') + delay);
+}
+
 function getCsrfToken() {
     if (!csrfRequest) {
         csrfRequest = fetch('/users/csrf', { credentials: 'same-origin', cache: 'no-store' })
             .then(async response => {
+                checkCapacity(response);
                 if (!response.ok) throw new Error('Unable to prepare the form. Please retry.');
                 const result = await response.json();
                 if (typeof result.csrfToken !== 'string' || !/^[a-f0-9]{64}$/.test(result.csrfToken)) {
@@ -63,6 +71,7 @@ form.addEventListener('submit', async event => {
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
             body: JSON.stringify(body)
         });
+        checkCapacity(response);
         if (response.status === 403) throw new Error('Your form session changed or expired. Please submit again.');
         if (response.status === 401 && !usernameInput) throw new Error('Incorrect email or password.');
         if (!response.ok) throw new Error(await response.text() || 'Unable to complete this request.');

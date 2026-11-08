@@ -59,6 +59,11 @@ app.use('/users', (req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
     next();
 });
+const authThrottle = require('./middleware/authThrottle').createAuthThrottle();
+authThrottle.mount(app);
+const throttleCleanup = setInterval(() => authThrottle.sweep(), 60000);
+throttleCleanup.unref();
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -123,5 +128,7 @@ app.use('/boards', privateResponse, requireAuth, boardsRouter);
 app.get('/', (req, res) => {
     res.redirect('/landingpage.html');
 });
+
+app.use(require('./middleware/passwordWork').passwordWorkError);
 
 module.exports = app;

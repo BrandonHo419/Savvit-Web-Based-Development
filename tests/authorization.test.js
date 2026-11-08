@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { before, after, test } = require('node:test');
+const { before, beforeEach, after, test } = require('node:test');
 const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 const fs = require('node:fs');
@@ -232,7 +232,15 @@ mysql.createPool = () => ({
         });
     }
 });
+// Isolate throttle windows between tests without changing session wall-clock time
+// or disabling the production limiter. Each test still exercises real quotas.
+const throttleModule = require('../middleware/authThrottle');
+const originalThrottleFactory = throttleModule.createAuthThrottle;
+let throttleTime = 0;
+throttleModule.createAuthThrottle = () => originalThrottleFactory({ now: () => throttleTime });
 const app = require('../app');
+throttleModule.createAuthThrottle = originalThrottleFactory;
+beforeEach(() => { throttleTime += 3600000; });
 mysql.createPool = originalCreatePool;
 let server;
 let baseUrl;
@@ -1193,4 +1201,46 @@ test('CSRF bootstrap is stable and login replaces both anonymous cookie and toke
     assert.equal((await request('/users/csrf', { actor }).then(r => r.json())).csrfToken, actor.token);
     assert.equal((await request('/boards', { actor, token: anonymous.token, method: 'POST', body: { name: 'Must not create' } })).status, 403);
     assert.equal((await request('/users/profile', { actor })).status, 200);
+});
+
+
+test('actual app throttles credential floods before CSRF, session allocation and password work', async () => {
+    const originalCompare = bcrypt.compare;
+    let comparisons = 0;
+    bcrypt.compare = async () => { comparisons++; return false; };
+    try {
+        for (let i = 0; i < 30; i++) {
+            assert.equal((await request('/users/login', { method: 'POST', authCsrf: false, body: {} })).status, 403);
+        }
+        const response = await fetch(`${baseUrl}/USERS/LOGIN/`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '192.0.2.99' }, body: '{invalid'
+        });
+        assert.equal(response.status, 429);
+        assert.equal(response.headers.get('retry-after'), '900');
+        assert.equal(response.headers.get('set-cookie'), null);
+        assert.equal(comparisons, 0);
+    } finally { bcrypt.compare = originalCompare; }
+});
+
+test('actual login, signup and admin creation share bcrypt capacity and recover after release', async () => {
+    const { passwordWork } = require('../middleware/passwordWork');
+    const releases = [];
+    const jobs = Array.from({ length: 4 }, () => passwordWork(() => new Promise(resolve => releases.push(resolve))));
+    const count = writes.length;
+    try {
+        for (const [url, actor] of [['/users/login', undefined], ['/users/signup', undefined], ['/users/admin_add_user', admin]]) {
+            const response = await request(url, { actor, method: 'POST', body: {
+                username: 'capacity-test', email: users[0].email, password
+            } });
+            assert.equal(response.status, 503, url);
+            assert.equal(response.headers.get('retry-after'), '5');
+            assert.match(response.headers.get('cache-control'), /no-store/);
+            assert.match(await response.text(), /temporarily busy/);
+        }
+        assert.equal(writes.length, count);
+    } finally {
+        releases.forEach(resolve => resolve());
+        await Promise.all(jobs);
+    }
+    assert.ok((await login(1)).cookie);
 });

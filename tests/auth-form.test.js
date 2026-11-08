@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const csrf = require('../controllers/csrfController');
 
-function setup({ signup = false, status = 200, failBootstrap = false, pendingBootstrap = false } = {}) {
+function setup({ signup = false, status = 200, failBootstrap = false, pendingBootstrap = false, bootstrapStatus = 200 } = {}) {
     let submit, finishBootstrap;
     const calls = [];
     const button = { disabled: false };
@@ -22,11 +22,11 @@ function setup({ signup = false, status = 200, failBootstrap = false, pendingBoo
             if (url === '/users/csrf') {
                 tokenRequests++;
                 if (failBootstrap && tokenRequests === 1) throw Error('offline');
-                const response = Response.json({ csrfToken: String(tokenRequests).repeat(64) });
+                const response = bootstrapStatus === 200 ? Response.json({ csrfToken: String(tokenRequests).repeat(64) }) : new Response('Busy', { status: bootstrapStatus, headers: { 'Retry-After': '5' } });
                 if (pendingBootstrap && tokenRequests === 1) return new Promise(resolve => { finishBootstrap = () => resolve(response); });
                 return response;
             }
-            return status === 200 ? Response.json({ redirect: '/home.html' }) : new Response('Rejected', { status });
+            return status === 200 ? Response.json({ redirect: '/home.html' }) : new Response('Rejected', { status, headers: { 'Retry-After': '5' } });
         }
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../public/js/login.js'), 'utf8'), context);
@@ -62,7 +62,7 @@ test('bootstrap failure is recoverable without submitting credentials prematurel
     assert.equal(view.window.location.href, '/home.html');
 });
 
-for (const status of [401, 403, 500]) {
+for (const status of [401, 403, 429, 500, 503]) {
     test(`credential failure ${status} preserves input and never retries automatically`, async () => {
         const view = setup({ status });
         await view.submit();
@@ -91,3 +91,14 @@ test('bootstrap returns no token before persistence and reports save failure', (
         else assert.match(res.body.csrfToken, /^[a-f0-9]{64}$/);
     }
 });
+
+for (const bootstrapStatus of [429, 503]) {
+    test(`bootstrap capacity ${bootstrapStatus} shows retry delay and never posts credentials`, async () => {
+        const view = setup({ bootstrapStatus });
+        await view.submit();
+        assert.equal(view.calls.filter(c => c.url === '/users/login').length, 0);
+        assert.match(view.error.innerText, /Wait 5 seconds/);
+        assert.equal(view.fields['login-pass'].value, 'password-only');
+        assert.equal(view.button.disabled, false);
+    });
+}

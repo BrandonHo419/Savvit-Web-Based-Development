@@ -1,5 +1,6 @@
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
+const { passwordWork } = require('./middleware/passwordWork');
 
 // Sets up password startegies
 function initialize(passport, getUserByEmail, getUserById) {
@@ -7,7 +8,7 @@ function initialize(passport, getUserByEmail, getUserById) {
         try {
             const user = await getUserByEmail(email);
             if (!user) return done(null, false, { message: 'Incorrect Password or Email' });
-            if (await bcrypt.compare(password, user.password_hash)) {
+            if (await passwordWork(() => bcrypt.compare(password, user.password_hash))) {
                 return done(null, user);
             }
             return done(null, false, { message: 'Incorrect Password or Email' });

@@ -696,3 +696,55 @@ Run `npm test`. Manual authentication checks:
    is required.
 
 No dependencies, migrations, persistent session store or login throttling are added.
+
+### Authentication throttling (Stage 13D)
+
+The active login/signup and CSRF bootstrap routes now enforce process-local limits
+before body parsing, session allocation, CSRF validation or Passport work:
+
+| Endpoint | Per network identity | Window |
+|---|---:|---|
+| POST `/users/login` | 30 requests | 15 minutes |
+| POST `/users/signup` | 5 requests | 1 hour |
+| GET/HEAD `/users/csrf` | 60 requests | 15 minutes |
+
+All three also share a 300-request, one-minute global gate. Windows start on the
+first request and do not slide. Accepted attempts count regardless of eventual
+success, validation/CSRF failure or database error. Rejected endpoint attempts
+also count against the global gate; rejected requests never extend a deadline.
+Success does not reset quotas. Fixed windows permit bursts across boundaries.
+
+Identity comes from the socket peer, ignoring forwarding headers. IPv4-mapped
+IPv6 shares its IPv4 key; native IPv6 is grouped by /56. Users behind the same
+network share quotas. There are no account-only lockouts or IP+email counters.
+No proxy setting changes are made: behind a reverse proxy all requests would
+share its identity until a separate trusted-proxy design is approved.
+
+Each endpoint map holds at most 10,000 keys. Expired keys are removed once per
+minute and before inserting into a full map. Active entries are not evicted to
+admit new keys. The clock is monotonic, independent of wall-clock adjustments.
+Limit exhaustion returns 429 with a rounded-up `Retry-After` in seconds; map
+capacity exhaustion returns 503 with `Retry-After: 5`. Both are private/no-store.
+An exhausted early gate may return 429 before the usual validation/CSRF error.
+
+Login comparisons, signup hashing and admin-create hashing share four concurrent
+bcrypt slots, with no waiting queue. Saturation returns generic 503 with
+`Retry-After: 5`; slots release on success or failure. CSRF and input validation
+still precede password work. Admin creation has no additional request quota.
+Login/signup forms show capacity feedback and retry timing, preserve fields and
+require explicit resubmission. Bootstrap failures never submit credentials.
+
+These controls add no dependency or schema change. Counters reset on restart and
+do not coordinate multiple processes. They do not bound the session MemoryStore,
+prevent distributed denial of service or remove existing account-enumeration
+signals. Persistent sessions and deployment protection remain separate work.
+
+Verification: `npm test` includes fake-clock limits/expiry, bounded-map capacity,
+IPv4/IPv6 identity, parallel HTTP admission, forwarding-header spoofing, route
+case/trailing slash/HEAD handling, actual-app early rejection, shared bcrypt
+capacity/recovery, and form failure/retry behavior. Existing HTTP tests receive
+independent simulated throttle windows; production quotas are not disabled.
+
+Do not run a flood against a deployed service or use real credentials in console
+scripts. Clock/concurrency/capacity boundaries are covered automatically; no
+manual hour-long wait or limit changes are needed.
