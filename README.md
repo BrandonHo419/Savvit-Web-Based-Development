@@ -748,3 +748,34 @@ independent simulated throttle windows; production quotas are not disabled.
 Do not run a flood against a deployed service or use real credentials in console
 scripts. Clock/concurrency/capacity boundaries are covered automatically; no
 manual hour-long wait or limit changes are needed.
+
+
+### Workspace cleanup (Stage 14)
+
+Home now focuses on your boards, with a private-board creation form, inline
+loading/error feedback and an explicit retry action. Failed creation preserves
+the board name, and repeated submission is blocked while a request is pending.
+Explore links to working public-board discovery; unavailable YouTube/Pixabay
+search is explained without sending provider requests. Profile displays actual
+account details with retry support. Placeholder notifications, dead settings
+links, non-persistent avatar selection and empty tabs are removed from Profile.
+Home, Explore, Profile, board detail and public discovery share navigation labels.
+The existing green palette is retained with wrapping navigation and visible focus.
+
+Manual verification:
+1. Sign in and open Home: existing board names/counts should appear. With a fresh
+   account, confirm the empty-state explanation and enabled creation form.
+2. Create a private board and confirm navigation to its detail page. Submit twice
+   quickly: only one create request should be sent.
+3. Stop the server while Home is open and try creation: the entered name remains.
+   Restart, sign in again if needed, then explicitly retry.
+4. Open Explore and follow Browse public boards. Confirm no failed YouTube or
+   Pixabay requests are issued by Home or Explore.
+5. Open Profile: verify username/email, Home navigation and Log out confirmation.
+   A failed profile request should show Retry; only a 401 redirects to login.
+6. Check Home, Explore and Profile at desktop and narrow mobile widths.
+
+Automated coverage exercises board rendering, empty state, duplicate submission,
+failed-input retention, explicit recovery and anonymous/service-error behavior.
+Provider modules and unused legacy pages remain on disk for separately scoped
+cleanup. Shared with me, richer search and pin-editing improvements are later stages.

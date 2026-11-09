@@ -1,0 +1,25 @@
+/* Shared finishing styles for the existing green workspace. */
+.header { flex-wrap: wrap; gap: 1rem; }
+.nav { flex-wrap: wrap; gap: 1rem; }
+.nav [aria-current="page"] { color: #00df81; text-decoration: underline; text-underline-offset: .35em; }
+.brand { color: inherit; text-decoration: none; font-size: 1.5rem; font-weight: 700; }
+main { padding-bottom: 2rem; }
+main h1 { font-size: 2rem; }
+main h2 { margin-bottom: 1rem; }
+main p { line-height: 1.6; margin: .75rem 0; }
+main a { color: #73efbb; }
+.panel { background: #032221; padding: 1.5rem; border: 1px solid #27534a; border-radius: 12px; }
+#collections-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 1rem; }
+.collection-info { padding: 1.25rem; overflow-wrap: anywhere; }
+.collection-info h3 { margin-bottom: .5rem; }
+#create-board-form { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: 1rem; }
+#create-board-form input { min-width: 0; flex: 1 1 220px; }
+#create-board-form input, #create-board-submit, #collections-retry, #profile-retry, .action-link { font: inherit; padding: .7rem 1rem; border-radius: 8px; border: 1px solid #00df81; }
+#create-board-form input { background: #f1f7f6; color: #152e27; }
+#create-board-submit, #collections-retry, #profile-retry, .action-link { background: #00df81; color: #052b20; cursor: pointer; }
+.action-link { display: inline-block; text-decoration: none; }
+button:disabled { opacity: .6; cursor: wait; }
+.muted { color: #b5cec7; }
+#profile-details dt { font-weight: 700; margin-top: 1rem; }
+#profile-details dd { margin: .35rem 0 1rem; overflow-wrap: anywhere; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #ffd478; outline-offset: 4px; }

@@ -1,148 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Savvit - Save the Program</title>
-
-  <!-- Styles -->
-  <link href="https://fonts.googleapis.com/css?family=Noto+Sans" rel="stylesheet">
-  <link rel="stylesheet" href="./stylesheets/personalised-recommendatinos.css">
-  <link rel="stylesheet" href="./stylesheets/pin_style_fixed.css">
-  <link rel="stylesheet" href="./stylesheets/modal_styles.css">
-  <link rel="stylesheet" href="./stylesheets/view_modal.css">
-  <link rel="stylesheet" href="./stylesheets/style.css">
-  <link rel="stylesheet" href="./stylesheets/board.css">
-  <link rel="stylesheet" href="./stylesheets/avatar.css">
-  <link rel="stylesheet" href="./stylesheets/collections.css">
-
-
-  <!-- Font Awesome -->
-  <script src="https://kit.fontawesome.com/49190efb46.js" crossorigin="anonymous" defer></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
-  <!-- Main Logic -->
-  <script type="module" src="./js/searchBar.js"></script>
-  <script type="module" src="./js/collections.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home — Savvit</title>
+  <link rel="stylesheet" href="/stylesheets/personalised-recommendatinos.css">
+  <link rel="stylesheet" href="/stylesheets/collections.css">
+  <link rel="stylesheet" href="/stylesheets/workspace.css">
+  <script type="module" src="/js/collections.js"></script>
 </head>
-
-<body>
-  <div id="savvit_home">
-    <div class="container">
-      <div class="header">
-        <h1>Savvit</h1>
-        <div class="nav">
-          <a href="home.html">Home</a>
-          <a href="explore.html">Explore</a>
-          <a href="public-boards.html">Public boards</a>
-          <a href="profile.html">Profile</a>
-          <a href="/logout.html">Logout</a>
-        </div>
-        <input type="search" placeholder="Search for content" class="search-bar" id="search-bar">
-      </div>
-
-      <div class="home_navigation_bar" style="display: none;">
-        <div class="pint_mock_icon_container add_pin">
-          <i class="fa-solid fa-plus" alt="add_pin"></i>
-        </div>
-        <select id="board_select">
-          <option value="" disabled selected>Select Board</option>
-        </select>
-      </div>
-
-      <div class="create_board_modal" style="display: none;">
-        <div class="modal_content">
-          <h3>Create New Board</h3>
-          <input type="text" id="new_board_name" placeholder="Board name" />
-          <button type="button" id="submit_board_btn">Create</button>
-          <button type="button" id="cancel_board_btn">Cancel</button>
-        </div>
-      </div>
-
-      <div class="welcome">
-        <h2 id="welcome-title">Welcome to Savvit!</h2>
-        <p id="welcome-subtitle">Explore content suited toward YOUR interests!</p>
-      </div>
-
-      <div class="section">
-        <h3 id="section-title">Recommendations</h3>
-        <div class="explore-grid" id="explore-grid"></div>
-        <div class="pin_container" style="display: none;"></div>
-        <div style="text-align:center; margin: 1em;">
-          <button id="loadMorePixabay">Load More</button>
-        </div>
-      </div>
-
-
-      <div class="section" id="collections-section">
-        <div class="collection-container"></div>
-        <h3>Your Collections</h3>
-        <button id="create_board_btn" type="button">+ Create Board</button>
-        <p id="collections-status" role="status"></p>
-        <div class="collections-grid" id="collections-grid"></div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Modals -->
-  <div class="add_pin_modal" style="display: none;">
-    <div class="add_pin_container">
-      <div class="side" id="left_side">
-        <div class="section1">
-          <div class="icon_container"><i class="fas fa-ellipsis-h icon"></i></div>
-        </div>
-        <div class="section2">
-          <label for="upload_img" id="upload_img_label">
-            <div class="upload_img_container">
-              <div class="dotted_border">
-                <div class="icon_container">
-                  <img src="./img/upload.png" alt="upload image" class="upload_icon">
-                </div>
-                <div>Click to Upload</div>
-                <div>JPEG, PNG or WebP. Maximum 10 MB (10,000,000 bytes).</div>
-              </div>
-            </div>
-            <input type="file" name="upload_img" id="upload_img" accept="image/jpeg,image/png,image/webp">
-          </label>
-          <div class="modal_pin">
-            <div class="pin_image" ><img src="./img/create.jpg" alt="pin_image"></div>
-          </div>
-        </div>
-        <div class="section3">
-          <div class="upload_link">Paste destination URL</div>
-        </div>
-      </div>
-
-      <div class="side" id="right_side">
-        <div class="section1">
-          <div class="select_size">
-            <select name="board_id" id="board_id">
-              <option value="" disabled selected>Board</option>
-            </select>
-            <div class="save_pin">Save</div>
-          </div>
-        </div>
-        <div class="section2">
-          <input placeholder="Add your title" type="text" class="new_pin_input" id="pin_title">
-          <input placeholder="Tell everyone what your Pin is about" type="text" class="new_pin_input"
-            id="pin_description">
-          <input placeholder="Add your destination link" type="text" class="new_pin_input" id="pin_destination">
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- View Modal -->
-  <div id="modalContainer"></div>
-
-  <div id="uploadLinkPopup" class="upload-link-popup" style="display: none;">
-    <input type="text" id="uploadLinkInput" placeholder="Paste image or page link here..." />
-    <button type="button" id="confirmUploadLink">Use URL</button>
-    <button type="button" id="closeUploadPopup" class="close-popup-btn">&times;</button>
-  </div>
-
-</body>
-
+<body><div class="container">
+  <header class="header"><a class="brand" href="/home.html">Savvit</a><nav class="nav" aria-label="Main"><a href="/home.html" aria-current="page">Home</a><a href="/explore.html">Explore</a><a href="/public-boards.html">Public boards</a><a href="/profile.html">Profile</a><a href="/logout.html">Log out</a></nav></header>
+  <main>
+    <section class="welcome"><h1>Your saved ideas</h1><p>Create a board, add image pins and keep your inspiration organised.</p></section>
+    <section class="section" aria-labelledby="boards-heading">
+      <h2 id="boards-heading">Your boards</h2>
+      <p id="collections-status" role="status" aria-live="polite">Loading your boards…</p>
+      <button id="collections-retry" type="button" hidden>Retry</button>
+      <div class="collections-grid" id="collections-grid" aria-busy="true"></div>
+    </section>
+    <section class="section panel" aria-labelledby="create-heading">
+      <h2 id="create-heading">Create a board</h2>
+      <p>New boards are private. You can change visibility in board settings.</p>
+      <form id="create-board-form">
+        <label for="new-board-name">Board name</label>
+        <input id="new-board-name" name="name" required maxlength="255" placeholder="For example, Travel ideas" disabled>
+        <button id="create-board-submit" type="submit" disabled>Create board</button>
+      </form>
+      <p id="create-board-status" role="status" aria-live="polite"></p>
+    </section>
+    <p><a href="/public-boards.html">Browse public boards</a> to discover ideas from other people.</p>
+</main>
+</div></body>
 </html>

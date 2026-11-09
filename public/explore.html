@@ -1,40 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Savvit Explore</title>
-    <link href="http://fonts.googleapis.com/css?family=Noto+Sans" rel="stylesheet">
-    <link rel="stylesheet" href="./stylesheets/personalised-recommendatinos.css">
-    <link rel="stylesheet" href="./stylesheets/pin_style_fixed.css">
-    <link rel="stylesheet" href="./stylesheets/videostyle.css">
-    <script src="http://kit.fontawesome.com/49190efb46.js" crossorigin="anonymous" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Explore — Savvit</title>
+  <link rel="stylesheet" href="/stylesheets/personalised-recommendatinos.css">
+  <link rel="stylesheet" href="/stylesheets/collections.css">
+  <link rel="stylesheet" href="/stylesheets/workspace.css">
+
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Savvit Explore</h1>
-            <div class="nav">
-                <a href="home.html">Home</a>
-                <a href="explore.html">Explore</a>
-                <a href="profile.html">Profile</a>
-                <a href="/logout.html">Logout</a>
-            </div>
-            <input type="search" placeholder="Search for content" class="search-bar" id="search-bar">
-        </div>
-
-        <div class="welcome">
-            <h2>Discover Random Content!</h2>
-            <p>Explore a variety of YouTube videos.</p>
-        </div>
-
-        <div class="section">
-            <h3>Random Recommendations</h3>
-            <div class="grid" id="video-grid"></div>
-        </div>
-    </div>
-
-    <script type="module" src="./js/explorepage.js"></script>
-    <!--script src="./js/redirection.js"></script  (doesnt exist) -->  
-</body>
+<body><div class="container">
+  <header class="header"><a class="brand" href="/home.html">Savvit</a><nav class="nav" aria-label="Main"><a href="/home.html">Home</a><a href="/explore.html" aria-current="page">Explore</a><a href="/public-boards.html">Public boards</a><a href="/profile.html">Profile</a><a href="/logout.html">Log out</a></nav></header>
+  <main>
+    <section class="welcome"><h1>Explore ideas</h1><p>Find inspiration in boards shared by other Savvit users.</p></section>
+    <section class="section panel"><h2>Public boards</h2><p>Search board names, open a collection and save pins to your own boards.</p><a class="action-link" href="/public-boards.html">Browse public boards</a></section>
+    <section class="section panel"><h2>Your next collection</h2><p>Organise your own images and links around a topic, project or interest.</p><a class="action-link" href="/home.html">Go to your boards</a></section>
+    <p class="muted">YouTube and Pixabay search are currently unavailable.</p>
+</main>
+</div></body>
 </html>
