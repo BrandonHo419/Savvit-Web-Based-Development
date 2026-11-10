@@ -762,20 +762,34 @@ links, non-persistent avatar selection and empty tabs are removed from Profile.
 Home, Explore, Profile, board detail and public discovery share navigation labels.
 The existing green palette is retained with wrapping navigation and visible focus.
 
-Manual verification:
-1. Sign in and open Home: existing board names/counts should appear. With a fresh
-   account, confirm the empty-state explanation and enabled creation form.
-2. Create a private board and confirm navigation to its detail page. Submit twice
-   quickly: only one create request should be sent.
-3. Stop the server while Home is open and try creation: the entered name remains.
-   Restart, sign in again if needed, then explicitly retry.
-4. Open Explore and follow Browse public boards. Confirm no failed YouTube or
-   Pixabay requests are issued by Home or Explore.
-5. Open Profile: verify username/email, Home navigation and Log out confirmation.
-   A failed profile request should show Retry; only a 401 redirects to login.
-6. Check Home, Explore and Profile at desktop and narrow mobile widths.
 
 Automated coverage exercises board rendering, empty state, duplicate submission,
 failed-input retention, explicit recovery and anonymous/service-error behavior.
 Provider modules and unused legacy pages remain on disk for separately scoped
 cleanup. Shared with me, richer search and pin-editing improvements are later stages.
+
+
+### Shared with me (Stage 15)
+
+Open **Shared with me** from the main navigation to find other users’ semi-private
+boards explicitly shared with your account. Each card shows the board name,
+owner username, description and viewing-access label. Search names or browse
+20 results per page, newest first with board ID as a stable tie-breaker.
+
+GET `/boards/shared?q=&page=1` derives identity from the authenticated session.
+It excludes owned boards, private boards even with retained grants, public boards,
+and boards without a grant. Responses contain no pin previews or viewer lists.
+Public collections remain under Public boards. No schema or dependency changes.
+
+Use Refresh shared boards to check for changes. Revoked access, deletion or a
+visibility change removes a board on the next list request. An already-rendered
+card can remain until refresh; opening it still uses the existing board access
+check. Grants retained while private/public become active again if the owner
+returns the board to semi-private. Nothing is automatically replayed on failure.
+
+
+Run `npm test` for automated HTTP/substitute-database and frontend checks. Run
+`npm run test:mysql` separately to verify the new shared-list SQL against the
+existing disposable-database integration runner. Existing application data is
+not used by that runner; administrator permissions may be needed to create its
+disposable database.

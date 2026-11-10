@@ -60,6 +60,16 @@ async function main() {
     assert.equal((await access()).code,404);
     for (let i=0;i<2;i++) assert.equal((await invoke(sharing.addViewer,{...req(uid),body:{username:'integration_viewer'}})).code,204);
     assert.equal((await access()).allowed,true);
+    const shared = user => invoke(boards.getSharedBoards, req(user));
+    assert.deepEqual((await shared(vid)).body.boards.map(b => b.board_id), [bid]);
+    assert.deepEqual((await shared(uid)).body.boards, []);
+    for (const visibility of ['private', 'public']) {
+      await database.query('UPDATE boards SET visibility = ? WHERE board_id = ?', [visibility, bid]);
+      assert.deepEqual((await shared(vid)).body.boards, []);
+    }
+    await database.query("UPDATE boards SET visibility = 'semi-private' WHERE board_id = ?", [bid]);
+    assert.equal((await shared(vid)).body.boards[0].owner_name, 'integration_owner');
+
     assert.equal((await invoke(pinAccess(r=>r.params.id),{...req(vid),params:{id:String(pid)}})).allowed,true);
     assert.equal((await invoke(uploadAccess,{...req(vid),path:'/uploads/integration.png'})).allowed,true);
     const contents = () => invoke(boards.getPinsForBoard,req(vid,did));
@@ -74,6 +84,8 @@ async function main() {
     assert.equal((await contents()).body.length,0);
     assert.equal((await listing()).body.find(b=>b.board_id===did).thumbnail,null);
     assert.equal(Number((await listing()).body.find(b=>b.board_id===did).pin_count),0);
+    assert.deepEqual((await shared(vid)).body.boards, []);
+    console.log('PASS shared discovery grants, ownership, visibility changes and revocation');
     console.log('PASS real SQL sharing, duplicate grants, revocation, thumbnails, counts and original blocking');
 
     await database.query('INSERT INTO board_viewers (board_id,user_id) VALUES (?,?)',[did,uid]);

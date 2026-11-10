@@ -8,7 +8,7 @@ input, button { font: inherit; padding: .65rem .9rem; border: 1px solid #648471;
 input { max-width: 100%; box-sizing: border-box; }
 button { background: #245b42; color: white; cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
-#public-board-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; margin: 1.5rem 0; }
+#public-board-list, #shared-board-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; margin: 1.5rem 0; }
 .board-card { display: block; padding: 1.25rem; border: 1px solid #cbd9d0; border-radius: 12px; background: white; text-decoration: none; overflow-wrap: anywhere; }
 .board-card:hover { border-color: #245b42; }
 .board-card h2 { margin-top: 0; }

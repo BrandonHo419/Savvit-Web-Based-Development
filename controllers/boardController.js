@@ -162,6 +162,32 @@ exports.getPublicBoards = async (req, res) => {
   }
 };
 
+exports.getSharedBoards = async (req, res) => {
+  const q = req.query.q === undefined ? '' : req.query.q;
+  const page = req.query.page === undefined ? '1' : req.query.page;
+  if (typeof q !== 'string' || q.length > 100 || typeof page !== 'string'
+      || !/^[1-9]\d*$/.test(page) || !Number.isSafeInteger(Number(page)) || Number(page) > 10000) {
+    return res.status(400).json({ error: 'Use a search of at most 100 characters and a page from 1 to 10000' });
+  }
+  try {
+    const [rows] = await pool.query(
+      `SELECT b.board_id, b.name, b.description, b.visibility, u.username AS owner_name
+       FROM boards b JOIN users u ON u.user_id = b.user_id
+       WHERE b.visibility = 'semi-private' AND b.user_id <> ?
+         AND EXISTS (SELECT 1 FROM board_viewers access
+                     WHERE access.board_id = b.board_id AND access.user_id = ?)
+         AND LOCATE(?, b.name) > 0
+       ORDER BY b.created_at DESC, b.board_id DESC LIMIT ? OFFSET ?`,
+      [req.user.user_id, req.user.user_id, q.trim(), 21, (Number(page) - 1) * 20]
+    );
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ boards: rows.slice(0, 20), page: Number(page), has_more: rows.length > 20 && Number(page) < 10000 });
+  } catch (err) {
+    console.error('Failed to load shared boards:', err);
+    res.status(500).json({ error: 'Unable to load shared boards' });
+  }
+};
+
 // Removing membership does not require permission to read the original pin.
 exports.removeReference = async (req, res) => {
   if (!validId(req.params.pin_id)) return res.status(400).json({ error: 'Invalid pin ID' });

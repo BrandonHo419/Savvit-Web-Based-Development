@@ -6,6 +6,7 @@ const sharing = require('../controllers/boardSharingController');
 const { boardAccess } = require('../middleware/authorization');
 
 // Routes
+router.get('/shared', boardController.getSharedBoards);
 router.get('/public', boardController.getPublicBoards);
 router.get('/users/:user_id/boards', boardController.getBoardsForUser);
 router.post('/', boardController.createBoard);

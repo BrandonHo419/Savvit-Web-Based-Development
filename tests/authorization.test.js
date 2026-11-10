@@ -54,6 +54,15 @@ async function query(sql, params = []) {
     const q = sql.replace(/\s+/g, ' ').trim();
     if (failPinInsert && q.startsWith('INSERT INTO pins')) throw new Error('Simulated pin insert failure');
     if (failLookup) throw new Error('Simulated database outage');
+    if (q.startsWith('SELECT b.board_id, b.name, b.description, b.visibility, u.username AS owner_name')) {
+        assert.match(q, /b.visibility = 'semi-private' AND b.user_id <> \?/);
+        assert.match(q, /access.board_id = b.board_id AND access.user_id = \?/);
+        assert.equal(params[0], params[1]);
+        return [boards.filter(b => b.visibility === 'semi-private' && b.user_id !== params[0]
+            && boardViewers.has(`${b.board_id}:${params[1]}`) && (b.name || '').includes(params[2]))
+            .sort((a,b) => b.board_id - a.board_id).slice(params[4], params[4] + params[3])
+            .map(b => ({ board_id: b.board_id, name: b.name, visibility: b.visibility, owner_name: `user${b.user_id}` }))];
+    }
     if (q.startsWith('SELECT b.board_id, b.name, b.description, u.username AS owner_name')) {
         assert.match(q, /WHERE b.visibility = 'public' AND LOCATE\(\?, b.name\) > 0/);
         assert.match(q, /ORDER BY b.created_at DESC, b.board_id DESC LIMIT \? OFFSET \?/);
@@ -1243,4 +1252,49 @@ test('actual login, signup and admin creation share bcrypt capacity and recover 
         await Promise.all(jobs);
     }
     assert.ok((await login(1)).cookie);
+});
+
+
+test('shared discovery isolates grants, visibility and ownership, then reflects revocation', async () => {
+    const original = boards.length;
+    try {
+        for (let i = 0; i < 25; i++) {
+            boards.push({ board_id: 3000+i, user_id: 1, visibility: 'semi-private', name: 'Shared %_' });
+            boardViewers.add(`${3000+i}:2`);
+        }
+        boards.push({ board_id: 4000, user_id: 1, visibility: 'private', name: 'Hidden' });
+        boards.push({ board_id: 4001, user_id: 1, visibility: 'public', name: 'Public' });
+        boards.push({ board_id: 4002, user_id: 2, visibility: 'semi-private', name: 'Owned' });
+        boards.push({ board_id: 4003, user_id: 1, visibility: 'semi-private', name: 'No grant' });
+        for (const id of [4000,4001,4002]) boardViewers.add(`${id}:2`);
+        assert.equal((await request('/boards/shared')).status, 401);
+        const first = await request('/boards/shared?user_id=1', { actor: bob });
+        assert.match(first.headers.get('cache-control'), /no-store/);
+        const result = await first.json();
+        assert.equal(result.boards.length, 20);
+        assert.equal(result.has_more, true);
+        assert.ok(result.boards.every(b => b.board_id >= 3000 && b.board_id < 3025));
+        assert.equal((await (await request('/boards/shared?q=%25_&page=2', { actor: bob })).json()).boards.length, 5);
+        assert.deepEqual((await (await request('/boards/shared', { actor: alice })).json()).boards, []);
+        boardViewers.delete('3024:2');
+        boards.find(b => b.board_id === 3023).visibility = 'private';
+        const updated = await (await request('/boards/shared', { actor: bob })).json();
+        assert.ok(updated.boards.every(b => b.board_id !== 3024 && b.board_id !== 3023));
+        assert.equal((await request('/boards/3024', { actor: bob })).status, 404);
+    } finally {
+        boards.length = original;
+        for (const key of [...boardViewers]) if (Number(key.split(':')[0]) >= 3000) boardViewers.delete(key);
+    }
+});
+
+test('shared discovery validates pagination and hides database error detail', async () => {
+    for (const query of ['page=0','page=10001','page=1&page=2','q=a&q=b','q='+'x'.repeat(101)]) {
+        assert.equal((await request('/boards/shared?'+query,{actor:bob})).status,400);
+    }
+    try {
+        failLookup=true;
+        const result=await request('/boards/shared',{actor:bob});
+        assert.equal(result.status,500);
+        assert.deepEqual(await result.json(),{error:'Unable to load shared boards'});
+    } finally { failLookup=false; }
 });
