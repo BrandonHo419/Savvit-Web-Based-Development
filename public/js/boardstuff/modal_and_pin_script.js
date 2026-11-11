@@ -34,6 +34,7 @@ document.getElementById('upload_img').addEventListener('change', (event) => {
   reader.onload = function () {
     if (state.uploaded_file !== file) return;
     const new_image = new Image();
+    new_image.alt = 'Selected image preview';
     state.pin_image_blob = reader.result;
 
     new_image.onerror = () => {
@@ -154,6 +155,7 @@ export function create_pin(pin_details) {
   const new_pin = document.createElement('div');
   new_pin.classList.add('pin_card');
   new_pin.dataset.boardId = pin_details.board_id || '';
+  new_pin.dataset.pinId = pin_details.pin_id || pin_details.id;
   new_pin.dataset.userId = pin_details.user_id || state.userId;
   new_pin.innerHTML = createPinMetadataHTML();
   new_pin.querySelector('.pin_title').textContent = pin_details.title || 'Untitled pin';
@@ -168,6 +170,8 @@ export function create_pin(pin_details) {
   });
 
   image.alt = pin_details.title || 'Saved pin';
+  image.loading = 'lazy';
+  image.decoding = 'async';
   new_pin.querySelector('.pin_image').appendChild(image);
 
   const fullPinDetails = {
@@ -202,7 +206,7 @@ document.querySelector('.add_pin').addEventListener('click', () => {
 // ------------------------Dismiss Modal on Background Click-------------------
 document.querySelector('.add_pin_modal').addEventListener('click', (event) => {
   if (event.target.classList.contains('add_pin_modal')) {
-    reset_modal();
+    document.getElementById('cancel-pin').click();
   }
 });
 
@@ -241,4 +245,9 @@ function reset_modal() {
   document.querySelector('.add_pin').focus();
 }
 
-document.getElementById('cancel-pin')?.addEventListener('click', reset_modal);
+document.getElementById('cancel-pin')?.addEventListener('click', () => {
+  if (savePinButton.disabled) return;
+  const hasDraft = state.uploaded_file || ['pin_title', 'pin_description', 'pin_destination'].some(id => document.getElementById(id).value.trim());
+  if (hasDraft && !window.confirm('Discard this unfinished pin? Your image and text have not been saved.')) return;
+  reset_modal();
+});

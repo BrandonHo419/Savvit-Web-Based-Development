@@ -3,6 +3,7 @@
 
 
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin</title>
   <meta charset=UTF-8>
   <link rel="stylesheet" href="/css/admin.css">
@@ -13,26 +14,16 @@
     rel="stylesheet">
 
   <script type="module" src="/js/admin.js"></script>
+  <link rel="stylesheet" href="/stylesheets/design-system.css">
+  <script src="/js/appearance.js"></script>
+  <script src="/js/dialog-accessibility.js"></script>
 </head>
 
 <body>
- <div id="adminContent">
+ <main id="adminContent">
   <header>
     <h1>Admin Page</h1>
-    <div class="nav-link">
-
-      <!-- Right stuff -->
-      <div class="nav-right">
-        <div class="profile-dropdown">
-          <button class="profile-btn" type="button">
-            <i class="fa-solid fa-user"></i>
-          </button>
-          <div class="dropdown-menu">
-            <button type="button" onclick="window.location.assign('/logout.html')" id="logOutButton">Logout</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <nav class="nav" aria-label="Main"><a href="/home.html">Home</a><a href="/profile.html">Profile</a><a href="/logout.html">Log out</a></nav>
   </header>
 
 <div class="user-action-wrapper">
@@ -49,7 +40,7 @@
     <label for="email">Email</label>
     <input type="email" id="email" required>
 
-    <label for="password">Password - Automacially hashed</label>
+    <label for="password">Password</label>
     <input type="password" id="password" required>
 
     <label for="role">Role</label>
@@ -68,7 +59,7 @@
 <div class="card user-delete-card">
   <form id="singleUserFormDel" class="inline-delete-form">
     <h2>Delete</h2>
-    <input type="number" id="delete" placeholder="User ID" required>
+    <input type="number" id="delete" aria-label="User ID to delete" placeholder="User ID" required>
     <button type="submit" class="submit-btn delete-btn">Delete</button>
     <p id="del-message"></p>
   </form>
@@ -78,7 +69,7 @@
 
 <div class="card customer-card">
     <h2 class="section-title">Users</h2>
-    <table class="customer-table">
+    <table class="customer-table"><caption>Registered users</caption>
         <thead>
             <tr>
                 <th>User ID</th>
@@ -94,7 +85,7 @@
         </tbody>
     </table>
 </div>
-</div>
+</main>
 
 
 </body>

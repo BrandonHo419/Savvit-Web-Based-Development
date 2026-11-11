@@ -25,37 +25,41 @@
   <!-- Main Logic -->
   <script type="module" src="./js/boardstuff/board.js"></script>
   <link rel="stylesheet" href="/stylesheets/workspace.css">
+  <link rel="stylesheet" href="/stylesheets/design-system.css">
+  <script src="/js/appearance.js"></script>
+  <script src="/js/dialog-accessibility.js"></script>
 </head>
 
 <body data-page="board">
   <div id="savvit_home">
     <div class="container">
       <div class="header">
-        <h1>Savvit</h1>
+        <a class="brand" href="/home.html">Savvit</a>
 <nav class="nav" aria-label="Main"><a href="/home.html">Home</a><a href="/explore.html">Explore</a><a href="/public-boards.html">Public boards</a><a href="/shared-boards.html">Shared with me</a><a href="/profile.html">Profile</a><a href="/logout.html">Log out</a></nav>
 
       </div>
 
+      <main id="main-content">
       <div class="home_navigation_bar">
         <button type="button" class="pint_mock_icon_container add_pin" style="display:none" aria-label="Add an image pin">
           <i class="fa-solid fa-plus" aria-hidden="true"></i> Add pin
         </button>
-        <select id="board_select">
+        <label for="board_select">Go to board</label><select id="board_select">
           <option value="" disabled selected>Select Board</option>
         </select>
       </div>
 
-      <div class="create_board_modal" style="display: none;">
+      <div class="create_board_modal" role="dialog" aria-modal="true" aria-labelledby="create-board-title" style="display: none;">
         <div class="modal_content">
-          <h3>Create New Board</h3>
+          <h2 id="create-board-title">Create a board</h2><label for="new_board_name">Board name</label>
           <input type="text" id="new_board_name" placeholder="Board name" />
           <button type="button" id="submit_board_btn">Create</button>
-          <button type="button" id="cancel_board_btn">Cancel</button>
+          <button type="button" id="cancel_board_btn" data-dialog-close>Cancel</button>
         </div>
       </div>
 
       <div class="welcome">
-        <h2 id="welcome-title">Loading board…</h2>
+        <h1 id="welcome-title">Loading board…</h2>
         <p id="welcome-subtitle"></p>
       </div>
 
@@ -107,15 +111,16 @@
         <div class="pin_container"></div>
       </div>
 
+    </main>
     </div>
   </div>
 
   <!-- Modals -->
-  <div class="add_pin_modal" style="display: none;">
+  <div class="add_pin_modal" role="dialog" aria-modal="true" aria-label="Create an image pin" style="display: none;">
     <div class="add_pin_container">
       <div class="side" id="left_side">
         <div class="section1">
-          <div class="icon_container"><i class="fas fa-ellipsis-h icon"></i></div>
+
         </div>
         <div class="section2">
           <label for="upload_img" id="upload_img_label">
@@ -128,22 +133,22 @@
                 <div>JPEG, PNG or WebP. Maximum 10 MB (10,000,000 bytes).</div>
               </div>
             </div>
-            <input type="file" name="upload_img" id="upload_img" accept="image/jpeg,image/png,image/webp">
           </label>
+          <input type="file" name="upload_img" id="upload_img" aria-label="Choose or replace image" aria-describedby="pin-create-status" accept="image/jpeg,image/png,image/webp">
           <div class="modal_pin">
             <div class="pin_image" ><img src="./img/create.jpg" alt="pin_image"></div>
           </div>
         </div>
         <div class="section3">
-          <div class="upload_link">Paste destination URL</div>
+          <button type="button" class="upload_link">Paste destination URL</button>
         </div>
       </div>
 
       <div class="side" id="right_side">
         <div class="section1">
-          <button type="button" id="cancel-pin">Cancel</button>
+          <button type="button" id="cancel-pin" data-dialog-close>Cancel</button>
           <div class="select_size">
-            <select name="board_id" id="board_id">
+            <label for="board_id">Save to board</label><select name="board_id" id="board_id" aria-describedby="pin-create-status">
               <option value="" disabled selected>Board</option>
             </select>
             <button type="button" class="save_pin">Save</button>
@@ -151,12 +156,12 @@
         </div>
         <div class="section2">
           <label for="pin_title">Title</label>
-          <input placeholder="Add your title" type="text" class="new_pin_input" id="pin_title" maxlength="255" required>
+          <input placeholder="Add your title" type="text" class="new_pin_input" id="pin_title" aria-describedby="pin-create-status" maxlength="255" required>
           <label for="pin_description">Description</label>
           <input placeholder="Tell everyone what your Pin is about" type="text" class="new_pin_input"
-            id="pin_description" maxlength="10000">
+            id="pin_description" aria-describedby="pin-create-status" maxlength="10000">
           <label for="pin_destination">Destination URL</label>
-          <input placeholder="https://example.com" type="url" class="new_pin_input" id="pin_destination" maxlength="2048" required>
+          <input placeholder="https://example.com" type="url" class="new_pin_input" id="pin_destination" aria-describedby="pin-create-status" maxlength="2048" required>
           <p id="pin-create-status" role="status" aria-live="polite"></p>
         </div>
       </div>
@@ -166,10 +171,12 @@
   <!-- View Modal -->
   <div id="modalContainer"></div>
 
-  <div id="uploadLinkPopup" class="upload-link-popup" style="display: none;">
-    <input type="text" id="uploadLinkInput" placeholder="Paste image or page link here..." />
+  <div id="uploadLinkPopup" class="upload-link-popup" role="dialog" aria-modal="true" aria-label="Destination URL" style="display: none;">
+    <div class="popup-panel">
+    <label for="uploadLinkInput">Destination URL</label><input type="url" id="uploadLinkInput" placeholder="Paste image or page link here..." />
     <button type="button" id="confirmUploadLink">Use URL</button>
-    <button type="button" id="closeUploadPopup" class="close-popup-btn">&times;</button>
+    <button type="button" id="closeUploadPopup" data-dialog-close aria-label="Close destination URL" class="close-popup-btn">&times;</button>
+    </div>
   </div>
 
 </body>

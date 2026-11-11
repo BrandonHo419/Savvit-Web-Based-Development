@@ -1,16 +1,16 @@
 <div id="viewModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
   <div class="modal-content-wrapper">
-    <button type="button" class="close-btn" aria-label="Close pin details">&times;</button>
+    <button type="button" class="close-btn" data-dialog-close aria-label="Close pin details">&times;</button>
     <div class="left-panel">
       <div class="image-container">
         <img id="modalImage" class="modal-image" alt="">
       </div>
       <div class="left-actions">
         <button type="button" id="likeButton" class="action-btn" aria-label="Toggle like">
-          <i class="far fa-heart" aria-hidden="true"></i><span id="likeCount">0</span>
+          <i class="far fa-heart" aria-hidden="true">♥</i> Like <span id="likeCount">0</span>
         </button>
         <button type="button" class="action-btn" aria-label="Delete original pin">
-          <i class="fas fa-trash" aria-hidden="true"></i>
+          <i class="fas fa-trash" aria-hidden="true"></i> Delete
         </button>
       </div>
       <p id="like-status" role="status" aria-live="polite"></p>

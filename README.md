@@ -1,21 +1,52 @@
 # Savvit
 
-**A visual bookmarking workspace for ideas, images, videos, and useful links.**
+**A visual bookmarking workspace for images, ideas and useful links.**
 
 I'm building Savvit as a portfolio project for collecting images and useful links. I want to make saved ideas easy to organise into boards, revisit and share.
 
-> **Project status: redevelopment.** This repository contains an existing application prototype and partially integrated features. It is not yet production-ready or verified to run end to end from a fresh clone.
+> **Project status: portfolio development.** I've implemented the core board, pin and sharing workflows, with automated regression tests and browser checks using fixture data. A hosted demo and end-to-end verification against real MySQL remain outstanding.
 
-## What Savvit is building
+## What Savvit does
 
 - **Accounts and profiles:** registration, login, password hashing, and session-based authentication.
-- **Boards and collections:** organise saved content into named groups.
-- **Pins and bookmarks:** save images, destination URLs, descriptions, and imported content.
-- **Discovery:** explore images and videos through experimental Pixabay and YouTube integrations.
+- **Boards and collections:** create boards, search and sort collections, manage visibility, and grant selected accounts viewing access.
+- **Pins and bookmarks:** upload images, edit titles and descriptions, search pins, save references, and move owned originals between boards.
+- **Discovery:** browse public boards and boards explicitly shared with your account. Browsing requires sign-in.
 - **Interactions:** likes, comments, threaded replies, and content management.
 - **Administration:** a basic user-management interface.
+- **Appearance and accessibility:** responsive layouts, light/dark/system themes, saved appearance preferences, labelled forms and keyboard-accessible dialogs.
 
-These capabilities are represented in the source code, but **not all of them currently work together**. See [Current limitations](#current-limitations) and [Roadmap](#roadmap).
+I'm keeping external provider integrations separate from the core experience. YouTube and Pixabay discovery are not currently available in the active UI. See [Current limitations](#current-limitations) for the remaining release work.
+
+## Skills demonstrated
+
+I use Savvit to demonstrate practical full-stack development through working features and inspectable tests.
+
+| Skill | How I apply it in Savvit | Implementation |
+| --- | --- | --- |
+| JavaScript and frontend development | I use ES modules, asynchronous requests and DOM rendering to build searchable boards and interactive pin details. | [Board UI](public/js/boardstuff/board.js), [pin interactions](public/js/boardstuff/pin_discussion.js) |
+| Node.js and Express | I organise HTTP endpoints into routers, controllers and middleware, with validation and consistent ownership checks. | [Routes](routes/), [controllers](controllers/), [authorization](middleware/authorization.js) |
+| SQL and relational modelling | I distinguish original pins from saved references, query access through related boards, and use transactions for dependent-record deletion. | [Board queries](controllers/boardController.js), [transactional deletion](models/pinDeletion.js), [schema](database.sql) |
+| Authentication and access control | I work with Passport, bcrypt, session-derived identity, CSRF protection and private/public/granted-viewer permissions. | [Passport configuration](passportStruct.js), [application middleware](app.js), [access tests](tests/authorization.test.js) |
+| Responsive CSS and accessibility | I use shared theme tokens, responsive grids, semantic labels, visible focus and modal focus management. | [Design system](public/stylesheets/design-system.css), [dialog accessibility](public/js/dialog-accessibility.js) |
+| Automated testing and debugging | I test authorization failures, request races, duplicate submissions, rollback behaviour and browser layouts. | [Tests](tests/), [browser runner](scripts/browser-ui.cjs), [MySQL runner](scripts/mysql-integration.cjs) |
+| Product and interaction design | I make saving a reference distinct from moving an original, preserve failed drafts, and provide loading, empty and retry states. | [Pin actions](public/js/boardstuff/pin_actions.js), [discussion tests](tests/pin-interactions.test.js) |
+
+### Portfolio summary
+
+> I extended Savvit, originally a collaborative academic project, into a portfolio-focused image and link bookmarking application using JavaScript, Express and MySQL. My redevelopment work focuses on ownership-aware sharing, reliable board and pin workflows, responsive themes, keyboard accessibility and regression testing.
+
+For a resume project entry, I would highlight:
+
+- Extended an Express/MySQL application with private, public and explicitly shared boards, enforcing session-based identity and ownership on content operations.
+- Built searchable board and pin interfaces, original/reference management, metadata editing, likes and threaded discussions using vanilla JavaScript.
+- Introduced a shared responsive design system and accessible modal behaviour; verified layouts across eleven pages at desktop, tablet and narrow mobile widths using headless Chrome.
+
+### Engineering decisions I can discuss
+
+- **References instead of copies:** saving a pin creates a membership relationship, so the original image and metadata remain the source of truth. Visibility changes must also affect saved references.
+- **Server-enforced ownership:** hiding a button is presentation, not authorization. Requests are checked against the signed-in account, including requests from administrators.
+- **Different levels of testing:** database substitutes exercise HTTP and permission behaviour; browser fixtures exercise layout and interaction. Neither proves that the real MySQL deployment works, so I keep that verification separate.
 
 ## Technology
 
@@ -23,10 +54,10 @@ These capabilities are represented in the source code, but **not all of them cur
 | --- | --- |
 | Frontend | HTML, CSS, vanilla JavaScript (ES modules) |
 | Backend | Node.js, Express |
-| Database | MySQL |
+| Database | MySQL, mysql2 |
 | Authentication | Passport.js (local strategy), bcrypt, express-session |
-| Integrations | YouTube Data API, Pixabay API (experimental) |
-| Tooling | npm, ESLint, HTML validation |
+| Uploads | Multer with image validation |
+| Testing and tooling | npm, Node's built-in test runner, headless Chrome |
 
 The active backend uses mysql2 through separate callback and promise connection pools. The older mysql dependency remains declared; consolidating database access is future work.
 
@@ -80,7 +111,7 @@ Use Node.js 24, npm, and MySQL 8. The smoke tests require Node.js 18 or later.
 
 5. Apply `migrations/008_board_viewers.sql` to the selected database using the
    MySQL client (`SOURCE C:/path/to/Savvit-Web/migrations/008_board_viewers.sql;`).
-   This is required for both fresh databases and upgrades; see Stage 8 below.
+   This is required for both fresh databases and upgrades.
 6. Run `npm start` and open `http://localhost:3000/landingpage.html`.
    In PowerShell, use `npm.cmd ci`, `npm.cmd test`, and `npm.cmd start` if
    execution policy blocks the npm PowerShell wrapper.
@@ -88,7 +119,7 @@ Use Node.js 24, npm, and MySQL 8. The smoke tests require Node.js 18 or later.
 The active board and pin routers are mounted and database settings are read
 from the environment. The unused `routes/index.js` is not mounted and imports
 packages outside the current manifest; it is not part of this startup path.
-External discovery is optional and may fail while provider keys are unavailable.
+External provider discovery is deferred and is not required for the core application.
 Do not put replacement credentials in public JavaScript. Backend provider-key
 configuration has not yet been implemented.
 
@@ -109,7 +140,7 @@ upload URLs. Frontend helper tests check session loading and CSRF headers.
 These tests do not read your `.env` or connect to MySQL. The authorization suite
 creates and removes temporary upload fixtures. Expected database-failure tests
 may print simulated errors; use the final pass/fail summary. SQL execution,
-real-database integrity and browser interactions still need integration checks.
+real-database integrity still need separate integration checks. Browser fixture checks are described below.
 
 ### Current access rules
 
@@ -154,8 +185,7 @@ repeat saves do not add duplicate engagement records.
 The new `GET /boards/:board_id` endpoint returns accessible board metadata and an
 `is_owner` flag; the server still enforces all permissions independently of the UI.
 No schema migration or backfill is needed: existing originals continue to appear
-through `pins.board_id`. Semi-private viewer grants are described in Stage 8. Restricted board
-deletion is described in Stage 7. Individual saved references can be removed as described in Stage 6.
+through `pins.board_id`. Semi-private boards use explicit viewer grants. Boards containing originals cannot be deleted; removing a saved reference affects only that membership.
 
 Manual workflow check:
 
@@ -170,64 +200,39 @@ Manual workflow check:
 7. Enter literal HTML-like text in a board name, pin title or comment. It should
    display as text, not create HTML elements or execute scripts.
 
-Browser layout and real MySQL execution have not yet been verified in this
-workspace. The automated authorization tests use a controlled database substitute;
-they check membership, privacy changes, duplicate saves and rollback behaviour.
-Upload validation, safe HTML rendering, transactions, persistent sessions and
-full input validation also remain required before public deployment.
+### Verification status
+
+My latest local regression run passed **204 tests**. I also ran the fixture-backed Chrome checks across eleven active pages at 1440, 768 and 320 pixels, including enlarged text, form labels, nested dialogs, focus return and persisted themes. Theme palette tests check text contrast; they are not a complete accessibility audit.
+
+To repeat the browser checks on Windows with Chrome installed and port 3000 free:
+
+```powershell
+node scripts/browser-ui.cjs
+node scripts/browser-ui.cjs --screenshots
+```
+
+The runner serves local fixture responses at `http://localhost:3000`, uses a temporary browser profile and leaves application data untouched. The screenshot option prints a temporary output folder. Its default Chrome path is Windows-specific; `SAVVIT_CHROME` can override the executable. This runner requires a Node version with a global WebSocket implementation; my local checks used Node.js 26.13.0.
+
+The separate `npm.cmd run test:mysql` runner creates and removes its own disposable database. It needs an account authorised to create that database; do not elevate the application account. The latest attempt was blocked by database permissions, so I do not claim a successful real-MySQL integration run. Screen-reader and deployed end-to-end checks remain outstanding.
 
 ## Current limitations
 
-- **Application wiring:** some routes, UI references, and asset paths are incomplete or inconsistent.
-- **Configuration:** active database settings use environment variables, but connection pools are duplicated and unused legacy routing code remains.
-- **Authentication and authorization:** session-derived identity, ownership and admin checks are implemented for active routes; semi-private viewer grants are implemented; real-database/browser verification is pending.
-- **API credentials:** revoked legacy values must be removed wherever they remain; replacement credentials require secure server-side handling before public deployment.
-- **File uploads:** uploaded images need validation, sensible size limits, and durable storage.
-- **Testing and deployment:** smoke and database-substituted authorization tests exist; real-database and browser coverage, reproducible containers, and a hosted demo remain pending.
+- I have not deployed a public demo or verified the complete setup against real MySQL from a fresh clone.
+- Public boards still require sign-in; anonymous browsing is not implemented.
+- Production session storage, durable image storage and deployment configuration remain release work. Uploaded files are currently retained after pin deletion.
+- YouTube and Pixabay discovery remain deferred. Provider credentials must stay out of public JavaScript.
+- Some legacy pages, styles and duplicated database access remain in the repository. The current shared design covers the active application pages.
+- Browser fixture checks and palette contrast tests do not establish full WCAG conformance. Screen-reader testing remains to be done.
 
-**Do not expose this version as a public multi-user service until the security and deployment blockers are addressed.**
+## Portfolio release plan
 
-## Roadmap
+I'm keeping the current feature set stable while I prepare a reviewable demonstration.
 
-### Phase 1 — Make the foundation reproducible
-- [ ] Remove unused legacy imports and dependencies after verification
-- [ ] Consolidate the environment-configured MySQL connection pools
-- [x] Mount the board and pin routes
-- [x] Add board and pin-detail pages
-- [ ] Audit remaining legacy HTML and asset references
-- [ ] Provide a clean schema, development seed data, and a working demo account
-- [ ] Add documented setup commands and a local Docker Compose environment
-
-### Phase 2 — Secure and stabilise
-- [x] Derive user identity from authenticated sessions, never from client-supplied IDs
-- [ ] Enforce ownership, admin permissions, input validation, and safe upload handling
-- [ ] Move third-party API calls requiring secrets to backend endpoints
-- [ ] Use an appropriate production session store, cookie settings, and security middleware
-- [ ] Add unit, API integration, and browser-level tests with CI
-
-### Phase 3 — Improve the experience
-- [ ] Polish the responsive dashboard, board management, and content-saving flow
-- [ ] Implement reliable bookmark search, filtering, and useful empty/error states
-- [ ] Add URL metadata previews, tags, and clearer collection organisation
-- [ ] Improve accessibility, keyboard navigation, and loading performance
-
-### Phase 4 — Publish and demonstrate
-- [ ] Deploy the application with a managed database and persistent image storage
-- [ ] Add a public read-only demo or safe demo-account experience
-- [ ] Publish screenshots, a short walkthrough video/GIF, and architecture documentation
-- [ ] Add live demo and CI links to this README when available
-
-## Demo plan
-
-The eventual public walkthrough will demonstrate:
-
-1. Register or enter a seeded demo account.
-2. Create a board and save a link or image as a pin.
-3. Organise and retrieve saved content.
-4. Search for content and, if enabled, import it from an external provider.
-5. View interactions and a responsive layout on desktop and mobile.
-
-**No live demo or screenshots are claimed at this stage.** They will be added after the core flows are working and tested.
+1. **Verify persistence:** run the disposable MySQL checks with suitable test credentials, then exercise registration, boards, uploads, sharing and revocation against real MySQL.
+2. **Prepare demonstration content:** use clearly labelled sample accounts and a small collection of images with confirmed usage rights. Existing development records are not a documented demo account.
+3. **Capture the experience:** publish desktop/mobile screenshots and a short walkthrough of creating a board, saving a reference, managing sharing and using the keyboard. Label fixture-backed screenshots if used before database verification.
+4. **Prepare hosting:** choose application hosting, managed MySQL, persistent image storage and a production session store before publishing an interactive demo.
+5. **Connect my portfolio:** add a Savvit project card with the repository link, screenshots, this skills summary and a live-demo link once available.
 
 ## Project background
 
