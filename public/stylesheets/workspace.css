@@ -23,3 +23,10 @@ button:disabled { opacity: .6; cursor: wait; }
 #profile-details dt { font-weight: 700; margin-top: 1rem; }
 #profile-details dd { margin: .35rem 0 1rem; overflow-wrap: anywhere; }
 a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #ffd478; outline-offset: 4px; }
+.board-controls { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: 1rem 0; }
+.board-controls > div { flex: 1 1 200px; min-width: 0; }
+.board-controls label { display: block; margin-bottom: .4rem; }
+.board-controls input, .board-controls select, .board-controls button { box-sizing: border-box; max-width: 100%; font: inherit; padding: .7rem 1rem; border: 1px solid #00df81; border-radius: 8px; }
+.board-controls input, .board-controls select { width: 100%; background: #f1f7f6; color: #152e27; }
+.board-controls button { background: #00df81; color: #052b20; cursor: pointer; }
+.board-controls select:focus-visible { outline: 3px solid #ffd478; outline-offset: 4px; }

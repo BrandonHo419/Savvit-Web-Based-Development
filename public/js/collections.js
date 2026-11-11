@@ -7,13 +7,39 @@ const form = document.getElementById('create-board-form');
 const nameInput = document.getElementById('new-board-name');
 const submit = document.getElementById('create-board-submit');
 const createStatus = document.getElementById('create-board-status');
+const query = document.getElementById('collections-query');
+const sort = document.getElementById('collections-sort');
+const reset = document.getElementById('collections-reset');
+let allBoards = [];
+let loaded = false;
 let loading = false;
 let saving = false;
 let ready = false;
 
-function renderCollections(boards) {
+function boardName(board) {
+    return String(board.name ?? '').trim() || 'Untitled board';
+}
+
+function compareBoards(a, b) {
+    const byId = String(a.board_id ?? '').localeCompare(String(b.board_id ?? ''), 'en', { numeric: true });
+    const byName = boardName(a).localeCompare(boardName(b), 'en', { sensitivity: 'base' });
+    if (sort.value === 'name') return byName || byId;
+    const aDate = a.created_at ? Date.parse(a.created_at) : NaN;
+    const bDate = b.created_at ? Date.parse(b.created_at) : NaN;
+    // Unknown dates stay last in either direction.
+    if (Number.isFinite(aDate) !== Number.isFinite(bDate)) return Number.isFinite(aDate) ? -1 : 1;
+    const byDate = Number.isFinite(aDate) ? aDate - bDate : 0;
+    return (sort.value === 'oldest' ? byDate : -byDate) || byId;
+}
+
+function renderCollections() {
+    if (!loaded) return;
+    const search = query.value.trim().toLowerCase();
+    const boards = allBoards.filter(board => boardName(board).toLowerCase().includes(search)).sort(compareBoards);
     grid.replaceChildren();
-    status.textContent = boards.length ? `${boards.length} ${boards.length === 1 ? 'board' : 'boards'}` : 'No boards yet. Create your first board below.';
+    status.textContent = !allBoards.length ? '0 boards. No boards yet. Create your first board below.'
+        : `${boards.length} of ${allBoards.length} boards${search ? ' match your search' : ''}.` +
+          (boards.length ? '' : ' No boards match. Clear your search to see all your boards.');
     for (const board of boards) {
         const card = document.createElement('a');
         card.href = `/board.html?board_id=${encodeURIComponent(board.board_id)}`;
@@ -21,7 +47,7 @@ function renderCollections(boards) {
         const info = document.createElement('div');
         info.className = 'collection-info';
         const title = document.createElement('h3');
-        title.textContent = board.name;
+        title.textContent = boardName(board);
         const count = document.createElement('p');
         const pins = Number(board.pin_count) || 0;
         count.textContent = `${pins} ${pins === 1 ? 'pin' : 'pins'}`;
@@ -34,6 +60,8 @@ function renderCollections(boards) {
 async function loadBoards() {
     if (loading) return;
     loading = true;
+    loaded = false;
+    query.disabled = sort.disabled = reset.disabled = true;
     retry.hidden = true;
     grid.setAttribute('aria-busy', 'true');
     status.textContent = 'Loading your boards…';
@@ -46,7 +74,10 @@ async function loadBoards() {
         const response = await apiFetch(`/boards/users/${session.user_id}/boards`);
         if (response.status === 401) { window.location.replace('/login.html'); return; }
         if (!response.ok) throw new Error();
-        renderCollections(await response.json());
+        allBoards = await response.json();
+        loaded = true;
+        renderCollections();
+        query.disabled = sort.disabled = reset.disabled = false;
     } catch {
         status.textContent = 'Unable to load your boards. Please try again.';
         retry.hidden = false;
@@ -79,4 +110,12 @@ form.addEventListener('submit', async event => {
     } finally { saving = false; submit.disabled = false; }
 });
 retry.addEventListener('click', loadBoards);
+query.addEventListener('input', renderCollections);
+sort.addEventListener('change', renderCollections);
+reset.addEventListener('click', () => {
+    query.value = '';
+    sort.value = 'newest';
+    renderCollections();
+    query.focus();
+});
 loadBoards();

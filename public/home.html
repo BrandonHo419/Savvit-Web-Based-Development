@@ -15,6 +15,11 @@
     <section class="welcome"><h1>Your saved ideas</h1><p>Create a board, add image pins and keep your inspiration organised.</p></section>
     <section class="section" aria-labelledby="boards-heading">
       <h2 id="boards-heading">Your boards</h2>
+      <div class="board-controls" role="search" aria-label="Your boards">
+        <div><label for="collections-query">Search board names</label><input id="collections-query" type="search" disabled></div>
+        <div><label for="collections-sort">Sort boards</label><select id="collections-sort" disabled><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name A–Z</option></select></div>
+        <button id="collections-reset" type="button" disabled>Clear search and reset sort</button>
+      </div>
       <p id="collections-status" role="status" aria-live="polite">Loading your boards…</p>
       <button id="collections-retry" type="button" hidden>Retry</button>
       <div class="collections-grid" id="collections-grid" aria-busy="true"></div>
