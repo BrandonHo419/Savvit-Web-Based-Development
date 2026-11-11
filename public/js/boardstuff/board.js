@@ -1,4 +1,5 @@
 import { setupBoardSharing } from './board_sharing.js';
+import { selectPins } from './pin_search.js';
 import { setupBoardSettings } from './board_settings.js';
 import { apiFetch } from '../api.js';
 
@@ -69,7 +70,6 @@ onSessionReady(async () => {
       });
 
       const result = await res.json();
-      console.log('Board creation response:', result);
 
       if (res.ok) {
         alert('Board created!');
@@ -123,7 +123,6 @@ function fetchBoards(selectedBoardId = null) {
         const newOption = boardModalSelect.querySelector(`option[value="${selectedBoardId}"]`);
         if (newOption) newOption.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-        // ✅ Load pins and show the add pin button
         loadPinsForBoard(selectedBoardId);
         const addPinButton = document.querySelector('.add_pin');
         if (addPinButton) addPinButton.style.display = state.canEditBoard ? 'flex' : 'none';
@@ -132,7 +131,39 @@ function fetchBoards(selectedBoardId = null) {
     .catch(err => console.error('Failed to load boards:', err));
 }
 
+let pinRequest = 0;
+let cachedPins = [];
+const pinQuery = document.getElementById('pin-query');
+const pinSort = document.getElementById('pin-sort');
+const pinReset = document.getElementById('pin-reset');
+const pinRetry = document.getElementById('pin-retry');
+function renderPins() {
+  const container = document.querySelector('.pin_container');
+  if (!container) return;
+  container.replaceChildren();
+  const matches = selectPins(cachedPins, pinQuery?.value, pinSort?.value);
+  const status = document.getElementById('board-status');
+  if (status) status.textContent = !cachedPins.length ? 'No visible pins yet. Add an image pin or save one from another board.'
+    : `${matches.length} of ${cachedPins.length} visible pins.` + (matches.length ? '' : ' No pins match. Clear your search to see all visible pins.');
+  matches.forEach(pin => create_pin({
+    id: pin.pin_id, title: pin.title, description: pin.description,
+    destination: pin.link_url, img_blob: pin.image_url, board_id: pin.board_id,
+    user_id: pin.user_id, username: pin.username,
+    is_liked: state.pinLikes[pin.pin_id], like_count: pin.like_count || 0
+  }));
+}
+pinQuery?.addEventListener('input', renderPins);
+pinSort?.addEventListener('change', renderPins);
+pinReset?.addEventListener('click', () => {
+  pinQuery.value = ''; pinSort.value = 'newest'; renderPins(); pinQuery.focus();
+});
+pinRetry?.addEventListener('click', () => loadPinsForBoard(state.activeBoardId));
+
 export function loadPinsForBoard(boardId) {
+  const request = ++pinRequest;
+  for (const control of [pinQuery, pinSort, pinReset]) if (control) control.disabled = true;
+  if (pinRetry) pinRetry.hidden = true;
+  document.querySelector('.pin_container')?.replaceChildren();
   const status = document.getElementById('board-status');
   if (status) status.textContent = 'Loading pins…';
   return apiFetch(`/boards/${boardId}/pins`)
@@ -141,32 +172,18 @@ export function loadPinsForBoard(boardId) {
       return res.json();
     })
     .then(pins => {
-      const container = document.querySelector('.pin_container');
-      if (!container) return;
-      container.replaceChildren();
-      if (status) status.textContent = pins.length ? `${pins.length} visible pins` : 'No visible pins yet. Add an image pin or save one from another board.';
-
-      pins.forEach(pin => {
-        state.pinLikes[pin.pin_id] = pin.is_liked === 1;
-
-        create_pin({
-          id: pin.pin_id,
-          title: pin.title,
-          description: pin.description,
-          destination: pin.link_url,
-          img_blob: pin.image_url,
-          board_id: pin.board_id,
-          user_id: pin.user_id,
-          username: pin.username,
-          is_liked: pin.is_liked === 1,
-          like_count: pin.like_count || 0
-        });
-      });
+      if (request !== pinRequest) return;
+      cachedPins = pins;
+      for (const pin of pins) state.pinLikes[pin.pin_id] = pin.is_liked === 1;
+      renderPins();
+      for (const control of [pinQuery, pinSort, pinReset]) if (control) control.disabled = false;
     })
     .catch(err => {
-      console.error('Error loading pins for board:', err);
+      if (request !== pinRequest) return;
+      cachedPins = [];
+      if (pinRetry) pinRetry.hidden = false;
       document.querySelector('.pin_container')?.replaceChildren();
-      if (status) status.textContent = 'Unable to load pins. Reload the page to try again.';
+      if (status) status.textContent = 'Unable to load pins. Please retry.';
     });
 }
 

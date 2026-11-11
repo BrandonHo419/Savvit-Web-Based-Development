@@ -97,7 +97,13 @@
           <button type="button" id="delete-board" hidden>Delete board</button>
           <p id="delete-board-status" role="status" aria-live="polite"></p>
         </details>
-        <p id="board-status" role="status"></p>
+        <div class="board-controls" role="search" aria-label="Board pins">
+          <div><label for="pin-query">Search pin titles and descriptions</label><input id="pin-query" type="search" disabled></div>
+          <div><label for="pin-sort">Sort pins</label><select id="pin-sort" disabled><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></div>
+          <button id="pin-reset" type="button" disabled>Clear search and reset sort</button>
+        </div>
+        <p id="board-status" role="status" aria-live="polite"></p>
+        <button id="pin-retry" type="button" hidden>Retry loading pins</button>
         <div class="pin_container"></div>
       </div>
 
@@ -144,10 +150,14 @@
           </div>
         </div>
         <div class="section2">
-          <input placeholder="Add your title" type="text" class="new_pin_input" id="pin_title" aria-label="Pin title">
+          <label for="pin_title">Title</label>
+          <input placeholder="Add your title" type="text" class="new_pin_input" id="pin_title" maxlength="255" required>
+          <label for="pin_description">Description</label>
           <input placeholder="Tell everyone what your Pin is about" type="text" class="new_pin_input"
-            id="pin_description" aria-label="Pin description">
-          <input placeholder="Add your destination link" type="text" class="new_pin_input" id="pin_destination" aria-label="Destination URL">
+            id="pin_description" maxlength="10000">
+          <label for="pin_destination">Destination URL</label>
+          <input placeholder="https://example.com" type="url" class="new_pin_input" id="pin_destination" maxlength="2048" required>
+          <p id="pin-create-status" role="status" aria-live="polite"></p>
         </div>
       </div>
     </div>

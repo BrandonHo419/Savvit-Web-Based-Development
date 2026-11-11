@@ -52,6 +52,13 @@ let failUserLookup = false;
 
 async function query(sql, params = []) {
     const q = sql.replace(/\s+/g, ' ').trim();
+    if (q.startsWith('UPDATE pins p JOIN boards b')) {
+        assert.match(q, /WHERE p.pin_id = \? AND p.user_id = \? AND b.user_id = \?$/);
+        const pin = pins.find(p => p.pin_id === Number(params[3]) && p.user_id === params[4]
+            && boards.some(b => b.board_id === p.board_id && b.user_id === params[5]));
+        if (pin) Object.assign(pin, { title: params[0], description: params[1], link_url: params[2] });
+        return [{ affectedRows: pin ? 1 : 0 }];
+    }
     if (failPinInsert && q.startsWith('INSERT INTO pins')) throw new Error('Simulated pin insert failure');
     if (failLookup) throw new Error('Simulated database outage');
     if (q.startsWith('SELECT b.board_id, b.name, b.description, b.visibility, u.username AS owner_name')) {
@@ -449,6 +456,27 @@ test('a CSRF token from another session cannot authorize a mutation', async () =
     const count = writes.length;
     assert.equal((await request('/boards', { actor: alice, token: bob.token, method: 'POST', body: { name: 'No' } })).status, 403);
     assert.equal(writes.length, count);
+});
+
+test('pin editing requires ownership and CSRF, validates metadata and preserves original membership', async () => {
+    const body = { title: '  Updated title  ', description: 'Notes', link_url: 'https://example.test/page' };
+    const original = { ...pins[0] };
+    try {
+        assert.equal((await request('/pins/100', { method: 'PATCH', body })).status, 403);
+        assert.equal((await request('/pins/100', { actor: alice, method: 'PATCH', body, token: 'invalid' })).status, 403);
+        for (const actor of [bob, admin]) {
+            assert.equal((await request('/pins/100', { actor, method: 'PATCH', body })).status, 404);
+        }
+        for (const change of [{ title: '' }, { title: 'x'.repeat(256) }, { description: null }, { description: 'x'.repeat(10001) }, { link_url: 'javascript:alert(1)' }, { link_url: 'https://user:pass@example.test' }]) {
+            assert.equal((await request('/pins/100', { actor: alice, method: 'PATCH', body: { ...body, ...change } })).status, 400);
+        }
+        const response = await request('/pins/100', { actor: alice, method: 'PATCH', body: { ...body, user_id: 2, board_id: 20 } });
+        assert.equal(response.status, 200);
+        assert.equal((await response.json()).title, 'Updated title');
+        assert.equal(pins[0].board_id, original.board_id);
+        assert.equal(pins[0].user_id, original.user_id);
+        assert.equal(pins[0].image_url, original.image_url);
+    } finally { Object.keys(pins[0]).forEach(key => delete pins[0][key]); Object.assign(pins[0], original); }
 });
 
 test('private upload URLs reject other accounts before static delivery', async () => {

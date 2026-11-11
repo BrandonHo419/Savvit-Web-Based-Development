@@ -13,29 +13,49 @@
           <i class="fas fa-trash" aria-hidden="true"></i>
         </button>
       </div>
+      <p id="like-status" role="status" aria-live="polite"></p>
     </div>
     <div class="right-panel">
       <h2 id="modal-title" class="pin_title"></h2>
       <p class="description"></p>
+      <details id="pin-editing" hidden>
+        <summary>Edit original pin</summary>
+        <p>Changes also appear wherever this pin is saved.</p>
+        <form id="pin-edit-form">
+          <label for="edit-pin-title">Title</label><input id="edit-pin-title" required maxlength="255">
+          <label for="edit-pin-description">Description</label><textarea id="edit-pin-description" maxlength="10000" rows="4"></textarea>
+          <label for="edit-pin-url">Destination URL</label><input id="edit-pin-url" type="url" required maxlength="2048">
+          <button type="submit">Save changes</button><button type="reset">Reset changes</button>
+          <p id="pin-edit-status" role="status" aria-live="polite"></p>
+        </form>
+      </details>
       <a class="pin_link" target="_blank" rel="noopener noreferrer">Open original link</a>
       <div id="modalUserProfile" class="user-profile"></div>
       <div class="save-section">
         <label for="boardSelect">Save a reference to</label>
         <select id="boardSelect"><option value="" disabled selected>Select a board</option></select>
-        <button type="button" class="save-btn">Save</button>
+        <button type="button" class="save-btn">Save reference</button>
+        <button type="button" id="move-pin" hidden>Move original here</button>
       </div>
+      <a id="original-board"></a>
+      <p>Saving adds a reference without copying or moving the image. Both boards must remain accessible to view a saved pin.</p>
+      <p id="save-status" role="status" aria-live="polite"></p>
+      <button type="button" id="boards-retry" hidden>Retry destination boards</button>
       <button type="button" id="remove-reference" hidden>Remove from this board</button>
       <p id="reference-status" role="status" aria-live="polite"></p>
       <p>Access to a saved pin follows its original board.</p>
       <section id="comments-section" class="comment-section comments-section">
         <h3>Comments (<span id="comment-count">0</span>)</h3>
         <div id="comment-list" class="comment-list"></div>
+        <p id="comments-status" role="status" aria-live="polite"></p>
+        <button type="button" id="comments-retry">Refresh comments</button>
       </section>
       <div class="add-comment">
         <label for="commentInput">Comment</label>
         <input id="commentInput" type="text" maxlength="2000">
         <button id="postComment" type="button">Post</button>
       </div>
+      <p id="comment-status" role="status" aria-live="polite"></p>
     </div>
   </div>
 </div>

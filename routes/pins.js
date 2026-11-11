@@ -41,7 +41,5 @@ router.post('/comments/:comment_id/replies', commentAccess, pinController.addRep
 router.post('/youtube', ownDestination, pinController.createYouTubePin);
 router.post('/pixabay', ownDestination, pinController.createPixabayPin);
 router.delete('/:id', ownPin, pinController.deletePin);
-module.exports = router;
-
-// Export router for use in main application
+router.patch('/:id', ownPin, require('../controllers/pinEditingController').updatePin);
 module.exports = router;

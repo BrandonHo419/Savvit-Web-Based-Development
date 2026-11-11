@@ -1,8 +1,7 @@
 import { apiFetch } from '../api.js';
-//COMMENT LOADING & REPLY LOGIC
 
-// --- COMMENT HANDLING ---
-// Load Comments for a Pin
+let sequence = 0;
+const currentPin = id => String(document.getElementById('viewModal').dataset.pinId) === String(id);
 
 function renderComment(entry, className) {
   const container = document.createElement('div');
@@ -11,7 +10,8 @@ function renderComment(entry, className) {
   author.textContent = entry.user_username || `User${entry.user_id}`;
   const time = document.createElement('span');
   time.className = 'timestamp';
-  time.textContent = new Date(entry.created_at).toLocaleString();
+  const date = new Date(entry.created_at);
+  time.textContent = Number.isFinite(date.getTime()) ? date.toLocaleString() : '';
   const content = document.createElement('p');
   content.className = `${className}-text`;
   content.textContent = entry.content;
@@ -20,77 +20,94 @@ function renderComment(entry, className) {
 }
 
 export async function loadComments(pinId) {
-  const commentList = document.getElementById('comment-list');
-  const commentCount = document.getElementById('comment-count');
-  commentList.replaceChildren();
-  commentCount.textContent = '0';
+  if (!currentPin(pinId)) return;
+  const request = ++sequence;
+  const list = document.getElementById('comment-list');
+  const count = document.getElementById('comment-count');
+  const status = document.getElementById('comments-status');
+  const refresh = document.getElementById('comments-retry');
+  refresh.disabled = true;
+  list.replaceChildren();
+  count.textContent = '…';
+  status.textContent = 'Loading comments…';
   try {
-    const res = await apiFetch(`/pins/${pinId}/comments`);
-    if (!res.ok) throw new Error('Unable to load comments');
-    const comments = await res.json();
-    if (String(document.getElementById('viewModal').dataset.pinId) !== String(pinId)) return;
-    comments.forEach(comment => {
-      const commentEl = renderComment(comment, 'comment');
-      commentEl.dataset.commentId = comment.comment_id;
-      const replies = document.createElement('div');
-      replies.className = 'replies';
-      (comment.replies || []).forEach(reply => replies.appendChild(renderComment(reply, 'reply')));
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'reply-btn';
-      button.textContent = 'Reply';
-      commentEl.append(replies, button);
-      commentList.appendChild(commentEl);
-      attachReplyHandler(button);
-    });
-    commentCount.textContent = comments.length;
-  } catch (err) {
-    console.error('Failed to load comments:', err);
-    if (String(document.getElementById('viewModal').dataset.pinId) === String(pinId)) {
-      commentList.textContent = 'Unable to load comments.';
+    const response = await apiFetch(`/pins/${pinId}/comments`);
+    if (!response.ok) throw new Error();
+    const comments = await response.json();
+    if (!currentPin(pinId) || request !== sequence) return;
+    for (const comment of comments) {
+      const element = renderComment(comment, 'comment');
+      addReplyForm(element, pinId, comment.comment_id);
+      const replies = comment.replies || [];
+      // Flat reply rows keep long threads usable on narrow screens.
+      for (const reply of replies) {
+        const row = renderComment(reply, 'reply');
+        if (reply.parent_reply_id) {
+          const parent = replies.find(item => Number(item.reply_id) === Number(reply.parent_reply_id));
+          const context = document.createElement('p');
+          context.textContent = parent ? `Replying to ${parent.user_username || `User${parent.user_id}`}` : 'Replying to an earlier reply';
+          row.prepend(context);
+        }
+        addReplyForm(row, pinId, comment.comment_id, reply.reply_id);
+        element.appendChild(row);
+      }
+      list.appendChild(element);
     }
+    count.textContent = comments.length;
+    status.textContent = comments.length ? '' : 'No comments yet. Start the conversation.';
+  } catch {
+    if (!currentPin(pinId) || request !== sequence) return;
+    count.textContent = '—';
+    status.textContent = 'Unable to load comments. Please refresh to try again.';
+  } finally {
+    if (currentPin(pinId) && request === sequence) refresh.disabled = false;
   }
 }
-// -- Attach Reply Box to a Comment---------------------
-export function attachReplyHandler(btn) {
-  btn?.addEventListener("click", function () {
-    const commentDiv = this.closest(".comment");
-    const existingBox = commentDiv.querySelector(".reply-box");
-    if (existingBox) return existingBox.remove(); // Toggle off if already exists
 
-    const replyBox = document.createElement("div");
-    replyBox.className = "reply-box";
-    replyBox.innerHTML = `
-      <input type="text" class="reply-input" placeholder="Reply...">
-      <button class="send-reply"><i class="fas fa-paper-plane"></i></button>
-    `;
-
-    commentDiv.appendChild(replyBox);
-
-    // Send reply to backend
-    replyBox.querySelector(".send-reply")?.addEventListener("click", async () => {
-      const replyText = replyBox.querySelector(".reply-input").value.trim();
-      const pinId = document.getElementById('viewModal')?.dataset.pinId;
-      const commentId = commentDiv.dataset.commentId;
-      if (!replyText || !commentId) return;
-
-      try {
-        const res = await apiFetch(`/pins/comments/${commentId}/replies`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: replyText })
-        });
-
-        if (res.ok) {
-          replyBox.remove();
-          loadComments(pinId); // Reload updated list
-        } else {
-          alert("Failed to reply.");
-        }
-      } catch (err) {
-        console.error(" Reply failed:", err);
-      }
-    });
-  });
+function addReplyForm(container, pinId, commentId, parentId = null) {
+  const generation = sequence;
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.textContent = parentId ? 'Reply to this reply' : 'Reply';
+  toggle.setAttribute('aria-expanded', 'false');
+  const form = document.createElement('form');
+  form.hidden = true;
+  form.className = 'reply-box';
+  const label = document.createElement('label');
+  label.textContent = 'Your reply';
+  const input = document.createElement('textarea');
+  input.maxLength = 2000;
+  input.required = true;
+  label.appendChild(input);
+  const send = document.createElement('button');
+  send.type = 'submit';
+  send.textContent = 'Post reply';
+  const status = document.createElement('p');
+  status.setAttribute('role', 'status');
+  form.append(label, send, status);
+  container.append(toggle, form);
+  let busy = false;
+  toggle.onclick = () => {
+    form.hidden = !form.hidden;
+    toggle.setAttribute('aria-expanded', String(!form.hidden));
+    if (!form.hidden) input.focus();
+  };
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (busy || !currentPin(pinId) || generation !== sequence) return;
+    const content = input.value.trim();
+    if (!content || content.length > 2000) { status.textContent = 'Enter a reply of 1–2,000 characters.'; return; }
+    busy = input.disabled = send.disabled = true;
+    status.textContent = 'Posting reply…';
+    try {
+      const response = await apiFetch(`/pins/comments/${commentId}/replies`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, parent_reply_id: parentId })
+      });
+      if (!response.ok) throw new Error();
+      if (currentPin(pinId) && generation === sequence) await loadComments(pinId);
+    } catch {
+      status.textContent = 'Unable to confirm your reply. Your draft is kept; check comments before retrying.';
+    } finally { busy = input.disabled = send.disabled = false; }
+  };
 }
-

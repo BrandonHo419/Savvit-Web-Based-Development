@@ -30,3 +30,6 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .board-controls input, .board-controls select { width: 100%; background: #f1f7f6; color: #152e27; }
 .board-controls button { background: #00df81; color: #052b20; cursor: pointer; }
 .board-controls select:focus-visible { outline: 3px solid #ffd478; outline-offset: 4px; }
+#pin-edit-form label { display: block; margin-top: .75rem; }
+#pin-edit-form input, #pin-edit-form textarea { box-sizing: border-box; width: 100%; font: inherit; padding: .6rem; }
+#pin-edit-form button { margin: .75rem .5rem .5rem 0; padding: .6rem; }

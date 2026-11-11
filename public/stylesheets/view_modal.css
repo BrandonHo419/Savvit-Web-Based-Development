@@ -10,6 +10,14 @@
   --icon-bg: rgba(255, 255, 255, 0.1);
 }
 
+#viewModal [hidden] { display: none !important; }
+#viewModal .description, #viewModal .comment-text, #viewModal .reply-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+#viewModal .save-section { flex-wrap: wrap; }
+#viewModal .reply { margin: .75rem 0 .75rem 1rem; border-left: 2px solid #00df81; padding-left: .75rem; }
+#viewModal .reply-box { display: block; }
+#viewModal .reply-box textarea { display: block; box-sizing: border-box; width: 100%; min-height: 4rem; }
+#viewModal button:disabled { opacity: .6; cursor: wait; }
+
 /* ========= Base Styles ========= */
 .thumbnail {
   width: 100%;

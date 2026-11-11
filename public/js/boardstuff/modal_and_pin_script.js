@@ -2,11 +2,14 @@ import { uploadError } from '../upload-policy.js';
 import { safeHttpUrl } from '../content.js';
 import { apiFetch } from '../api.js';
 
-
-
 import { state } from './state.js';
-import { buildImageElement } from './board.js';
+import { buildImageElement, loadPinsForBoard } from './board.js';
 import { handlePinClick } from './view_modal.js';
+
+function pinFeedback(message) {
+  const status = document.getElementById('pin-create-status');
+  if (status) status.textContent = message;
+}
 
 // ----------Image Upload Preview--------------
 document.getElementById('upload_img').addEventListener('change', (event) => {
@@ -75,10 +78,16 @@ savePinButton.addEventListener('click', () => {
   const link_url = document.querySelector('#pin_destination').value.trim();
 
   const imageError = uploadError(state.uploaded_file);
-  if (imageError) return alert(imageError);
-  if (!title || !link_url) return alert("Title and destination are required.");
+  if (imageError) return pinFeedback(imageError);
+  if (!title || title.length > 255) return pinFeedback('Enter a title of 1–255 characters.');
+  if (description.length > 10000) return pinFeedback('Keep the description within 10,000 characters.');
+  try {
+    const destination = new URL(link_url);
+    if (!['http:', 'https:'].includes(destination.protocol) || destination.username || destination.password || link_url.length > 2048) throw new Error();
+  } catch { return pinFeedback('Enter a complete HTTP or HTTPS destination URL without credentials.'); }
 
   const boardId = document.getElementById('board_id').value;
+  if (!boardId) return pinFeedback('Choose a board for this pin.');
   const formData = new FormData();
   formData.append('image', state.uploaded_file);
   formData.append('title', title);
@@ -88,6 +97,9 @@ savePinButton.addEventListener('click', () => {
   formData.append('board_id', boardId);
 
   savePinButton.disabled = true;
+  const fields = document.querySelectorAll('.add_pin_modal input, .add_pin_modal select, #cancel-pin');
+  fields.forEach(field => { field.disabled = true; });
+  pinFeedback('Saving your pin…');
   apiFetch('/pins', {
     method: 'POST',
     body: formData
@@ -99,31 +111,24 @@ savePinButton.addEventListener('click', () => {
     })
     .then(result => {
       if (!result.pin_id) {
-        return alert('Pin creation failed: no pin ID returned.');
+        throw new Error('Unable to confirm the new pin. Check the board before retrying.');
       }
 
-      create_pin({
-        id: result.pin_id, // pass pin ID for later reference
-        title,
-        description,
-        destination: link_url,
-        img_blob: `/uploads/${result.fileName}`,
-        board_id: boardId,
-        user_id: state.userId
-      });
+      loadPinsForBoard(state.activeBoardId);
 
+      savePinButton.disabled = false;
       reset_modal();
     })
     .catch(error => {
-      console.error('Upload failed:', error);
-      alert(error.message || 'Failed to upload pin.');
+      pinFeedback(error.message || 'Failed to upload pin. Please retry.');
     })
-    .finally(() => { savePinButton.disabled = false; });
+    .finally(() => {
+      savePinButton.disabled = false;
+      fields.forEach(field => { field.disabled = false; });
+    });
 });
 
-
 function createPinMetadataHTML() {
-  // Generates HTML structure for the pin's metadata
   return `
     <div class="pin_title"></div>
     <div class="pin_modal">
@@ -137,8 +142,8 @@ function createPinMetadataHTML() {
           </div>
           <span class="destination-text"></span>
         </div>
-        <div class="icon_container"><img src="./img/share.png" alt="share" class="icon"></div>
-        <div class="icon_container"><i class="fa fa-trash icon" aria-hidden="true" alt="edit"></i></div>
+
+
       </div>
     </div>
     <div class="pin_image"></div>
@@ -146,7 +151,6 @@ function createPinMetadataHTML() {
 }
 
 export function create_pin(pin_details) {
-  // Renders a pin card into the .pin_container area
   const new_pin = document.createElement('div');
   new_pin.classList.add('pin_card');
   new_pin.dataset.boardId = pin_details.board_id || '';
@@ -181,9 +185,6 @@ export function create_pin(pin_details) {
   document.querySelector('.pin_container').appendChild(new_pin);
 }
 
-
-const add_pin_modal = document.querySelector('.add_pin_modal');
-
 // ---------------------------Open Add Pin Modal------------------
 document.querySelector('.add_pin').addEventListener('click', () => {
   const modal = document.querySelector('.add_pin_modal');
@@ -207,7 +208,6 @@ document.querySelector('.add_pin_modal').addEventListener('click', (event) => {
 
 // Reset Fields and Modal
 function clearPinFormFields() {
-  // Clears the form inputs in the add pin modal
   document.querySelector('#pin_title').value = '';
   document.querySelector('#pin_description').value = '';
   document.querySelector('#pin_destination').value = '';
@@ -215,7 +215,6 @@ function clearPinFormFields() {
 }
 
 function clearPinImagePreview() {
-  // Clears the uploaded image preview from the modal
   const imageContainer = document.querySelector('.add_pin_modal .pin_image');
   if (imageContainer) imageContainer.innerHTML = '';
   document.querySelector('#upload_img_label').style.display = 'block';
@@ -234,10 +233,12 @@ function hidePinModal() {
 }
 
 function reset_modal() {
-  // Resets both form and UI of the Add Pin modal
+  if (savePinButton.disabled) return;
+  pinFeedback('');
   clearPinFormFields();
   clearPinImagePreview();
   hidePinModal();
+  document.querySelector('.add_pin').focus();
 }
 
 document.getElementById('cancel-pin')?.addEventListener('click', reset_modal);
