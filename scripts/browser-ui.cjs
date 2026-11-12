@@ -9,13 +9,27 @@ const root = path.resolve(__dirname, '../public');
 const boards = [{ board_id: 10, name: 'Weekend inspiration', description: 'A collection of useful ideas.', visibility: 'private', pin_count: 2, created_at: '2026-01-01' }, { board_id: 20, name: 'Places to explore', visibility: 'public', pin_count: 0 }];
 const pins = [{ pin_id: 100, board_id: 10, user_id: 1, username: 'Demo', title: 'A little inspiration', description: 'A full description with room to breathe.', image_url: '/img/image1.jpg', link_url: 'https://example.test', is_liked: 0, like_count: 2 }];
 let chrome, socket, server, profile;
+let fixtureRole = 'admin';
 async function main() {
   const artifacts = process.argv.includes('--screenshots') ? await fs.mkdtemp(path.join(os.tmpdir(), 'savvit-design-review-')) : null;
   server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost:3000');
+    if (url.pathname.startsWith('/Savvit-Web-Based-Development/')) {
+      const demoRoot = path.resolve(__dirname, '../docs');
+      const relative = url.pathname.slice('/Savvit-Web-Based-Development/'.length) || 'index.html';
+      const file = path.resolve(demoRoot, relative);
+      if (!file.startsWith(demoRoot + path.sep)) { res.writeHead(404); return res.end(); }
+      try {
+        const bytes = await fs.readFile(file);
+        res.setHeader('Content-Type', { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[path.extname(file)] || 'application/octet-stream');
+        return res.end(bytes);
+      } catch { res.writeHead(404); return res.end(); }
+    }
     const fixtures = {
-      '/users/profile': { user_id: 1, username: 'Demo', email: 'demo@example.test', role: 'admin' },
+      '/users/profile': { user_id: 1, username: 'Demo', email: 'demo@example.test', role: fixtureRole },
       '/users/user_info': [],
+      '/users/admin/summary': { accounts: 2, boards: 2, originals: 1, saved_references: 0, comments: 0, replies: 0 },
+      '/users/admin/accounts/2': { message: 'Account updated' },
       '/users/csrf': { csrfToken: '0'.repeat(64) },
       '/boards/users/1/boards': boards,
       '/boards/10': { ...boards[0], is_owner: true },
@@ -74,9 +88,57 @@ async function main() {
     await call('Page.navigate', { url: `http://localhost:3000/${page}.html${page === 'board' ? '?board_id=10' : ''}` });
     await until(`location.pathname === '/${page}.html' && document.readyState === 'complete' && !!document.querySelector('.appearance')`);
   }
+  await call('Page.navigate', { url: 'http://localhost:3000/Savvit-Web-Based-Development/' });
+  await until(`document.querySelectorAll('#grid .card').length === 3`);
+  for (const width of [1440, 768, 320]) {
+    await call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    assert.ok(await evaluate(`document.documentElement.scrollWidth <= innerWidth + 1`), `Demo overflow at ${width}`);
+  }
+  await evaluate(`document.documentElement.style.fontSize='200%'`);
+  assert.ok(await evaluate(`document.documentElement.scrollWidth <= innerWidth + 1`), 'Demo 200% text reflow');
+  await evaluate(`document.documentElement.style.fontSize=''; document.querySelector('#query').value='no match'; document.querySelector('#query').dispatchEvent(new Event('input'))`);
+  assert.equal(await evaluate(`document.querySelectorAll('#grid .card').length`), 0);
+  await evaluate(`document.querySelector('#filters').reset(); document.querySelector('#create').click()`);
+  assert.equal(await evaluate(`document.activeElement.id`), 'title-input');
+  await evaluate(`document.querySelector('#title-input').value='Browser test board'; document.querySelector('#edit-form').requestSubmit()`);
+  await until(`document.querySelector('#heading').textContent === 'Browser test board'`);
+  await evaluate(`document.querySelector('#create').click(); document.querySelector('#title-input').value='<img src=x onerror=alert(1)>'; document.querySelector('#description').value='A local pin'; document.querySelector('#edit-form').requestSubmit()`);
+  await until(`document.querySelectorAll('#grid .card').length === 1`);
+  assert.equal(await evaluate(`document.querySelector('#grid img')`), null);
+  await evaluate(`document.querySelector('#grid .card').click(); document.querySelector('#like').click(); document.querySelector('#comment').value='Local comment'; document.querySelector('#comment-form').requestSubmit(); document.querySelector('#destination').value='1'; document.querySelector('#save-form').requestSubmit()`);
+  assert.equal(await evaluate(`document.querySelector('#like').getAttribute('aria-pressed')`), 'true');
+  assert.ok(await evaluate(`document.querySelector('#comments').textContent.includes('Local comment')`));
+  await evaluate(`document.querySelector('#remove').click()`);
+  assert.equal(await evaluate(`document.querySelectorAll('#grid .card').length`), 0);
+  await evaluate(`document.querySelector('#undo').click()`);
+  assert.equal(await evaluate(`document.querySelectorAll('#grid .card').length`), 1);
+  await call('Page.reload');
+  await until(`document.querySelectorAll('#grid .card').length === 1`);
+  await evaluate(`document.querySelector('#grid .card').focus(); document.querySelector('#grid .card').click()`);
+  assert.equal(await evaluate(`document.querySelector('#like').getAttribute('aria-pressed')`), 'true');
+  assert.ok(await evaluate(`document.querySelector('#comments').textContent.includes('Local comment')`));
+  await evaluate(`document.querySelector('#like').click(); document.querySelector('#like').click()`);
+  await call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await until(`!document.querySelector('#detail').open`);
+  await until(`document.activeElement.classList.contains('card')`);
+  await evaluate(`document.querySelector('#reset').click(); document.querySelector('#reset-dialog [data-close]').click()`);
+  assert.equal(await evaluate(`document.querySelectorAll('#grid .card').length`), 1);
+  await evaluate(`document.querySelector('#reset').click(); document.querySelector('#confirm-reset').click()`);
+  await until(`document.querySelectorAll('#grid .card').length === 3 && !location.hash`);
+  if (artifacts) {
+    await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    const screenshot = await call('Page.captureScreenshot', { format: 'png' });
+    await fs.writeFile(path.join(artifacts, 'demo-desktop.png'), Buffer.from(screenshot.data, 'base64'));
+  }
+  console.log('PASS Pages demo: project subpath, reflow, search, creation, references, comments, persistence, undo and reset');
   for (const page of ['landingpage', 'home', 'board', 'profile', 'explore', 'public-boards', 'shared-boards', 'login', 'signup', 'logout', 'admin']) {
     await navigate(page);
     if (page === 'board') await until(`!!document.querySelector('.pin_card')`);
+    if (page === 'admin') {
+      await until(`document.querySelector('#site-statistics').textContent.includes('2 accounts')`);
+      assert.equal(await evaluate(`document.querySelector('#owner-controls').hidden`), true);
+    }
     for (const width of [1440, 768, 320]) {
       await call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
       const overflow = await evaluate(`({width: innerWidth, scroll: document.documentElement.scrollWidth, offenders: [...document.querySelectorAll('body *')].filter(el=>el.getClientRects().length && el.getBoundingClientRect().right > innerWidth + 1).slice(0,6).map(el=>el.tagName+'.'+el.className)})`);
@@ -138,6 +200,15 @@ async function main() {
     console.log(`Screenshots: ${artifacts}`);
   }
   console.log('PASS modal keyboard containment, Escape, inert background, focus return and persisted theme');
+  fixtureRole = 'owner';
+  await navigate('admin');
+  await until(`!document.querySelector('#owner-controls').hidden`);
+  await evaluate(`window.confirm = () => true; document.querySelector('#account-id').value = '2'; document.querySelector('#account-role').value = 'admin'; document.querySelector('#account-title').value = 'Co-developer'; document.querySelector('#account-access-form').requestSubmit()`);
+  await until(`document.querySelector('#account-access-status').textContent.includes('updated')`);
+  await navigate('profile');
+  await until(`document.querySelector('#account-role').textContent === 'owner'`);
+  assert.equal(await evaluate(`document.querySelector('#admin-link').hidden`), false);
+  console.log('PASS owner controls, admin restriction, role/title submission and profile management link (fixtures)');
   await send('Browser.close');
 }
 main().catch(error => { console.error(error.stack); process.exitCode = 1; }).finally(async () => {

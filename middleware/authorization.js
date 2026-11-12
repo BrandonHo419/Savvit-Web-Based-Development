@@ -14,7 +14,13 @@ async function canReadBoard(board, userId) {
 
 function requireAdmin(req, res, next) {
     if (!req.isAuthenticated()) return res.status(401).json({ error: 'Authentication required' });
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admins only' });
+    if (!['owner', 'admin'].includes(req.user.role)) return res.status(403).json({ error: 'Admins only' });
+    next();
+}
+
+function requireOwner(req, res, next) {
+    if (!req.isAuthenticated()) return res.status(401).json({ error: 'Authentication required' });
+    if (req.user.role !== 'owner') return res.status(403).json({ error: 'Site owner only' });
     next();
 }
 
@@ -107,4 +113,4 @@ const uploadAccess = guard(async req => {
 });
 
 
-module.exports = { validId, requireAdmin, boardAccess, pinAccess, commentAccess, uploadAccess };
+module.exports = { validId, requireAdmin, requireOwner, boardAccess, pinAccess, commentAccess, uploadAccess };

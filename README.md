@@ -83,6 +83,8 @@ The active backend uses mysql2 through separate callback and promise connection 
 
 ## Local development
 
+For a fresh deployment with no old accounts or pins, follow [Fresh deployment and site ownership](DEPLOYMENT.md). It uses `database/schema.sql`, a non-destructive installer and a one-time owner bootstrap. The legacy dump instructions below are for disposable development databases only.
+
 Use Node.js 24, npm, and MySQL 8. The smoke tests require Node.js 18 or later.
 
 1. Clone this repository and run `npm ci` to install the locked dependencies.
@@ -111,7 +113,7 @@ Use Node.js 24, npm, and MySQL 8. The smoke tests require Node.js 18 or later.
 
 5. Apply `migrations/008_board_viewers.sql` to the selected database using the
    MySQL client (`SOURCE C:/path/to/Savvit-Web/migrations/008_board_viewers.sql;`).
-   This is required for both fresh databases and upgrades.
+   This is required when using the legacy dump. Also apply `migrations/009_team_titles.sql` once for account titles; the fresh schema already includes both changes.
 6. Run `npm start` and open `http://localhost:3000/landingpage.html`.
    In PowerShell, use `npm.cmd ci`, `npm.cmd test`, and `npm.cmd start` if
    execution policy blocks the npm PowerShell wrapper.
@@ -202,7 +204,7 @@ Manual workflow check:
 
 ### Verification status
 
-My latest local regression run passed **204 tests**. I also ran the fixture-backed Chrome checks across eleven active pages at 1440, 768 and 320 pixels, including enlarged text, form labels, nested dialogs, focus return and persisted themes. Theme palette tests check text contrast; they are not a complete accessibility audit.
+My latest local regression run passed **215 tests**. I also ran the fixture-backed Chrome checks across eleven active pages at 1440, 768 and 320 pixels, including enlarged text, form labels, nested dialogs, focus return and persisted themes. The standalone Pages demo was checked at its repository subpath for reflow, creation, saved references, comments, reload persistence, undo and reset. Theme palette tests check text contrast; they are not a complete accessibility audit.
 
 To repeat the browser checks on Windows with Chrome installed and port 3000 free:
 
@@ -231,12 +233,18 @@ I'm keeping the current feature set stable while I prepare a reviewable demonstr
 1. **Verify persistence:** run the disposable MySQL checks with suitable test credentials, then exercise registration, boards, uploads, sharing and revocation against real MySQL.
 2. **Prepare demonstration content:** use clearly labelled sample accounts and a small collection of images with confirmed usage rights. Existing development records are not a documented demo account.
 3. **Capture the experience:** publish desktop/mobile screenshots and a short walkthrough of creating a board, saving a reference, managing sharing and using the keyboard. Label fixture-backed screenshots if used before database verification.
-4. **Prepare hosting:** choose application hosting, managed MySQL, persistent image storage and a production session store before publishing an interactive demo.
+4. **Prepare hosting:** publish the standalone browser demo from `docs/` on GitHub Pages. A future live app with real accounts still needs application hosting, MySQL, persistent image storage and a production session store.
 5. **Connect my portfolio:** add a Savvit project card with the repository link, screenshots, this skills summary and a live-demo link once available.
 
 ## Project background
 
 Savvit began as a collaborative academic web application. This repository is being developed further as an independently maintained portfolio project, with a focus on improving its architecture, security, usability, and deployability. The original collaborative work remains part of the project's history.
+
+## Interactive portfolio demo
+
+I keep a standalone demo in [docs/index.html](docs/index.html). It includes sample boards and illustrations, board/pin creation, search, sorting, likes, comments and saving references. Changes stay in the visitor's browser; **Reset demo** restores the samples. It does not connect to MySQL or create real accounts.
+
+Run `node scripts/preview-demo.cjs` and open `http://localhost:3000/Savvit-Web-Based-Development/`. Stop the main app first if it uses port 3000. Publishing instructions are in [DEPLOYMENT.md](DEPLOYMENT.md#github-pages-portfolio-demo). The Pages deployment has not yet been published or verified.
 
 ## Contributing and feedback
 

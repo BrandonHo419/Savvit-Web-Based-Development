@@ -1,4 +1,5 @@
 import { apiFetch, getSession } from './api.js';
+import { setupSiteManagement } from './site-management.js';
 
 document.addEventListener("DOMContentLoaded", () => {
     const toggleButtonAdd = document.getElementById('toggleBtnAdd');
@@ -7,7 +8,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const usernameInput = document.getElementById('username');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
-    const roleInput = document.getElementById('role');
     const deleteInput = document.getElementById('delete');
     const errorMessage = document.getElementById('error-message');
     const deleteMessage = document.getElementById('del-message');
@@ -39,9 +39,12 @@ document.addEventListener("DOMContentLoaded", () => {
                         const role = document.createElement('td');
                         role.innerText = users[i].role;
                         row.appendChild(role);
+                        const title = document.createElement('td');
+                        title.textContent = users[i].team_title || '—';
+                        row.appendChild(title);
                         const date_created = document.createElement('td');
                         // eslint-disable-next-line prefer-destructuring
-                        date_created.innerText = users[i].created_at.split('T')[0];
+                        date_created.innerText = users[i].created_at ? String(users[i].created_at).split('T')[0] : '—';
                         row.appendChild(date_created);
                     }
                 } else if (this.status === 401) {
@@ -64,11 +67,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (this.readyState === 4) {
             if (this.status === 200) {
                 const user = JSON.parse(this.responseText);
-                if (user.role === 'admin') {
+                if (['owner', 'admin'].includes(user.role)) {
                     // User is admin, show the content
                     adminContent.style.display = 'block';
                     // Now you can call your retrieveUserTable() and other init code here
                     retrieveUserTable();
+                    setupSiteManagement(user, retrieveUserTable);
                 } else {
                     // Not admin, redirect to home or login
                     window.location.href = "/login.html";
@@ -124,7 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
         event.preventDefault();
         return submitAdmin(addUserFormAdd, errorMessage, '/users/admin_add_user', {
             username: usernameInput.value, email: emailInput.value,
-            password: passwordInput.value, role: roleInput.value
+            password: passwordInput.value
         }, () => {
             addUserFormAdd.reset();
             addUserFormAdd.style.display = 'none';

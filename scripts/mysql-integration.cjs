@@ -22,13 +22,26 @@ async function main() {
     await admin.query(`CREATE DATABASE \`${name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`);
     created = true;
     database = await mysql.createConnection({ ...options, database: name, multipleStatements: true });
-    const schema = fs.readFileSync(path.join(__dirname, '../database.sql'), 'utf8');
-    assert.ok(!/\b(?:USE|CREATE\s+DATABASE|DROP\s+DATABASE)\s/i.test(schema), 'Schema must not switch databases');
-    await database.query(schema);
+    const { initializeEmptyDatabase, bootstrapOwner } = require('../models/freshInstall');
+    await initializeEmptyDatabase(database);
+    const [tables] = await database.query('SHOW TABLES');
+    for (const table of tables) {
+      const tableName = Object.values(table)[0];
+      assert.match(tableName, /^[a-z_]+$/);
+      const [[row]] = await database.query(`SELECT COUNT(*) AS total FROM \`${tableName}\``);
+      assert.equal(Number(row.total), 0, `${tableName} must start empty`);
+    }
+    await assert.rejects(initializeEmptyDatabase(database), /not empty/);
+    const ownerAccount = { username: 'bootstrap_owner', email: 'bootstrap_owner@example.test', password: randomUUID() };
+    const siteOwnerId = await bootstrapOwner(database, ownerAccount);
+    await assert.rejects(bootstrapOwner(database, ownerAccount), /zero accounts/);
+    const [[ownerRow]] = await database.query('SELECT role, team_title FROM users WHERE user_id = ?', [siteOwnerId]);
+    assert.equal(ownerRow.role, 'owner');
+    assert.equal(ownerRow.team_title, null);
     const migration = fs.readFileSync(path.join(__dirname, '../migrations/008_board_viewers.sql'), 'utf8');
     await database.query(migration);
     await database.query(migration); // Verify interruption-safe reruns on MySQL.
-    console.log('PASS schema import and migration rerun');
+    console.log('PASS empty schema, refusal of existing tables, owner bootstrap and migration rerun');
 
     process.env.DB_HOST = options.host;
     process.env.DB_PORT = String(options.port);

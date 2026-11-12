@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Try Savvit: a green, calm pinboard for collecting ideas. An interactive portfolio demo with browser-local saves.">
+  <title>Savvit — a place for your ideas</title>
+  <link rel="stylesheet" href="demo.css">
+  <script src="demo-model.js" defer></script><script src="demo.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header><a class="brand" href="#">Savvit<span> / the idea collection</span></a><nav aria-label="Main"><a href="#">Your boards</a><button id="theme" aria-pressed="false">Dark theme</button></nav></header>
+  <aside class="demo-note"><strong>Interactive demo</strong> · Sample content, no sign-up. Your changes stay in this browser. <button id="reset">Reset demo</button></aside>
+  <main id="main" tabindex="-1">
+    <section class="intro"><p class="eyebrow">COLLECT A LITTLE INSPIRATION</p><h1>A place for your ideas.</h1><p>Save what catches your eye. Make room for your next big thing.</p></section>
+    <div class="section-heading"><div><a id="back" href="#" hidden>← All boards</a><h2 id="heading" tabindex="-1">Your boards</h2></div><button id="create">+ New board</button></div>
+    <form class="filters" role="search" id="filters"><label>Search <input type="search" id="query" placeholder="Find a board…"></label><label>Sort <select id="sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name A–Z</option></select></label><button type="reset" class="secondary">Clear filters</button></form>
+    <p id="count" role="status"></p><div id="grid" class="grid"></div>
+    <p id="notice" role="status" aria-live="polite"></p><button id="undo" hidden>Undo removal</button><p id="storage-warning" role="alert"></p>
+    <section class="about"><h2>Small collections. Bigger possibilities.</h2><p>I built Savvit with vanilla JavaScript, Express and MySQL. This standalone demo lets you explore the pinboard experience without an account. Likes, comments and saves here are yours alone; there are no real users, shared permissions or admin privileges.</p><a href="https://github.com/BrandonHo419/Savvit-Web-Based-Development">Explore the full project on GitHub ↗</a></section>
+  </main>
+  <footer>Savvit · Portfolio demo · <a href="#main">Back to top ↑</a></footer>
+  <dialog id="editor" aria-labelledby="editor-title"><form id="edit-form"><div class="dialog-heading"><h2 id="editor-title">New board</h2><button type="button" data-close aria-label="Close editor">×</button></div><label id="title-label">Board name <input id="title-input" required maxlength="80"></label><div id="pin-fields" hidden><label>Description <textarea id="description" maxlength="1000" rows="3"></textarea></label><label>Sample illustration <select id="art"><option value="forest">Forest greens</option><option value="coast">Along the coast</option><option value="arch">Warm architecture</option></select></label><p class="muted">This demo uses bundled illustrations. File uploads are available in the full app.</p></div><p id="edit-error" role="alert"></p><button type="submit">Create</button></form></dialog>
+  <dialog id="detail" aria-labelledby="detail-title"><div class="dialog-heading"><h2 id="detail-title"></h2><button data-close aria-label="Close pin">×</button></div><div id="detail-art"></div><p id="detail-description"></p><button id="like" aria-pressed="false">Like</button><form id="save-form"><label>Save a reference to <select id="destination"></select></label><button>Save to board</button></form><p id="detail-status" role="status"></p><h3>Your demo comments</h3><ul id="comments"></ul><form id="comment-form"><label>Add a comment <textarea id="comment" required maxlength="500" rows="2"></textarea></label><button>Post comment</button></form><p id="comment-error" role="alert"></p><button id="remove" class="secondary">Remove from this board</button></dialog>
+  <dialog id="reset-dialog" aria-labelledby="reset-title"><h2 id="reset-title">Start fresh?</h2><p>This replaces your local demo boards, pins, likes and comments with the original samples. It cannot be undone.</p><button data-close autofocus>Keep exploring</button><button id="confirm-reset" class="secondary">Reset to samples</button></dialog>
+  <noscript><p>This interactive demo needs JavaScript. You can still explore the source repository using the link above.</p></noscript>
+</body></html>

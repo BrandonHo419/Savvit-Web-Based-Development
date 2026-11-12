@@ -25,6 +25,23 @@
     <h1>Admin Page</h1>
     <nav class="nav" aria-label="Main"><a href="/home.html">Home</a><a href="/profile.html">Profile</a><a href="/logout.html">Log out</a></nav>
   </header>
+  <section class="panel" aria-labelledby="statistics-title">
+    <h2 id="statistics-title">Site overview</h2>
+    <p id="site-statistics" role="status" aria-live="polite"></p>
+    <button id="refresh-statistics" type="button">Refresh statistics</button>
+    <p>These are site totals. Administrative access does not grant access to other members' private boards.</p>
+  </section>
+  <section id="owner-controls" class="panel" hidden aria-labelledby="owner-title">
+    <h2 id="owner-title">Owner controls</h2>
+    <p>Only the site owner can assign roles and team titles. Titles do not grant permissions. The owner account cannot be demoted or deleted here.</p>
+    <form id="account-access-form">
+      <label for="account-id">Account ID from the users table</label><input id="account-id" type="number" min="1" required>
+      <label for="account-role">Access role</label><select id="account-role"><option value="user">User</option><option value="admin">Admin</option></select>
+      <label for="account-title">Team title</label><select id="account-title"><option value="">No team title</option><option>Original Team Member</option><option>Co-developer</option><option>Co-founder</option></select>
+      <button type="submit">Apply role and title</button>
+    </form>
+    <p id="account-access-status" role="status" aria-live="polite"></p>
+  </section>
 
 <div class="user-action-wrapper">
  <div class="card" id="user-info-form" style="max-width: 600px;">
@@ -43,11 +60,7 @@
     <label for="password">Password</label>
     <input type="password" id="password" required>
 
-    <label for="role">Role</label>
-    <select id="role">
-      <option value="user">User</option>
-      <option value="admin">Admin</option>
-    </select>
+    <p>New accounts start as regular users. The site owner can assign an admin role or team title after creation.</p>
 
     <div style="margin-top: 1em;">
       <button type="submit" class="submit-btn" id="add-userBtn">Add</button>
@@ -77,6 +90,7 @@
                 <th>Email</th>
                 <th>Avatar</th>
                 <th>Role</th>
+                <th>Team title</th>
                 <th>Date Registered</th>
             </tr>
         </thead>

@@ -52,6 +52,15 @@ let failUserLookup = false;
 
 async function query(sql, params = []) {
     const q = sql.replace(/\s+/g, ' ').trim();
+    if (q.startsWith('UPDATE users SET role')) {
+        assert.match(q, /WHERE user_id = \? AND role IN \('user', 'admin'\)$/);
+        const target = users.find(u => u.user_id === Number(params[2]) && ['user', 'admin'].includes(u.role));
+        if (target) { target.role = params[0]; target.team_title = params[1]; }
+        return [{ affectedRows: target ? 1 : 0 }];
+    }
+    if (q.startsWith('SELECT (SELECT COUNT(*) FROM users) AS accounts')) {
+        return [[{ accounts: users.length, boards: boards.length, originals: pins.length, saved_references: savedPins.size, comments: 0, replies: 0 }]];
+    }
     if (q.startsWith('UPDATE pins p JOIN boards b')) {
         assert.match(q, /WHERE p.pin_id = \? AND p.user_id = \? AND b.user_id = \?$/);
         const pin = pins.find(p => p.pin_id === Number(params[3]) && p.user_id === params[4]
@@ -242,6 +251,11 @@ mysql.createPool = () => ({
             query(sql, params, done) {
                 if (typeof params === 'function') return params(null, users.map(({ password_hash, ...user }) => user));
                 if (sql.startsWith('SELECT')) return done(null, []);
+                if (sql.startsWith('DELETE FROM users')) {
+                    assert.equal(sql, 'DELETE FROM users WHERE user_id = ? AND role IN (?)');
+                    const target = users.find(u => u.user_id === params[0] && params[1].includes(u.role));
+                    if (!target) return done(null, { affectedRows: 0 });
+                }
                 writes.push({ sql, params });
                 done(null, { affectedRows: 1, insertId: 900 });
             }
@@ -1325,4 +1339,47 @@ test('shared discovery validates pagination and hides database error detail', as
         assert.equal(result.status,500);
         assert.deepEqual(await result.json(),{error:'Unable to load shared boards'});
     } finally { failLookup=false; }
+});
+
+
+test('site owner controls roles and titles without bypassing private content ownership', async () => {
+    const ownerRecord = { ...users[0], user_id: 4, username: 'user4', email: 'user4@example.test', role: 'owner' };
+    const original = { ...users[1] };
+    users.push(ownerRecord);
+    try {
+        const owner = await login(4);
+        for (const actor of [alice, bob]) {
+            assert.equal((await request('/users/admin/summary', { actor })).status, 403);
+        }
+        for (const actor of [admin, owner]) {
+            const summary = await request('/users/admin/summary', { actor });
+            assert.equal(summary.status, 200);
+            assert.deepEqual(Object.keys(await summary.json()).sort(), ['accounts','boards','comments','originals','replies','saved_references']);
+        }
+        const access = '/users/admin/accounts/2';
+        const body = { role: 'admin', team_title: 'Co-developer' };
+        assert.equal((await request(access, { actor: admin, method: 'PATCH', body })).status, 403);
+        assert.equal((await request(access, { actor: bob, method: 'PATCH', body })).status, 403);
+        assert.equal((await request(access, { actor: owner, method: 'PATCH', body, token: 'bad' })).status, 403);
+        for (const invalid of [{ ...body, role: 'owner' }, { ...body, team_title: 'Superuser' }]) {
+            assert.equal((await request(access, { actor: owner, method: 'PATCH', body: invalid })).status, 400);
+        }
+        assert.equal((await request('/users/admin/accounts/4', { actor: owner, method: 'PATCH', body })).status, 404);
+        assert.equal((await request('/users/admin_del_user', { actor: admin, method: 'POST', body: { user_id: 4 } })).status, 404);
+        assert.equal((await request('/users/admin_del_user', { actor: owner, method: 'POST', body: { user_id: 4 } })).status, 403);
+        assert.equal((await request(access, { actor: owner, method: 'PATCH', body })).status, 200);
+        assert.equal((await request('/users/admin/summary', { actor: bob })).status, 200);
+        assert.equal((await (await request('/users/profile', { actor: bob })).json()).team_title, 'Co-developer');
+        assert.equal((await request('/users/admin_del_user', { actor: admin, method: 'POST', body: { user_id: 2 } })).status, 404);
+        assert.equal((await request(access, { actor: owner, method: 'PATCH', body: { role: 'user', team_title: 'Original Team Member' } })).status, 200);
+        assert.equal((await request('/users/admin/summary', { actor: bob })).status, 403);
+        assert.equal((await request('/boards/10', { actor: owner })).status, 404);
+        assert.equal((await request('/pins/100', { actor: owner, method: 'DELETE' })).status, 404);
+        const accounts = await (await request('/users/user_info', { actor: owner })).json();
+        assert.ok(accounts.every(account => !('password_hash' in account)));
+    } finally {
+        users.pop();
+        Object.keys(users[1]).forEach(key => delete users[1][key]);
+        Object.assign(users[1], original);
+    }
 });

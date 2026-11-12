@@ -13,6 +13,9 @@ async function loadProfile() {
         if (!session) { window.location.replace('/login.html'); return; }
         document.getElementById('username').textContent = session.username;
         document.getElementById('email').textContent = session.email;
+        document.getElementById('account-role').textContent = session.role || 'user';
+        document.getElementById('team-title').textContent = session.team_title || 'None';
+        document.getElementById('admin-link').hidden = !['owner', 'admin'].includes(session.role);
         document.getElementById('profile-details').hidden = false;
         status.textContent = '';
     } catch {

@@ -5,7 +5,10 @@ const router = express.Router();
 const passport = require('passport');
 const { completeLogin } = require('../middleware/sessionLifecycle');
 const { validateLogin, validateRegistration } = require('../middleware/authInput');
-const { requireAdmin, validId } = require('../middleware/authorization');
+const { requireAdmin, requireOwner, validId } = require('../middleware/authorization');
+const siteManagement = require('../controllers/siteManagementController');
+router.get('/admin/summary', requireAdmin, siteManagement.getSummary);
+router.patch('/admin/accounts/:user_id', requireOwner, siteManagement.updateAccount);
 
 // Explicit bootstrap: ordinary anonymous pages still create no stored session.
 router.get('/csrf', require('../controllers/csrfController'));
@@ -92,7 +95,7 @@ router.post('/login', validateLogin, passport.authenticate('local'), (req, res) 
     email: req.user.email
   };
 
-  const redirectPath = req.user.role === 'admin' ? '/admin.html' : '/home.html';
+  const redirectPath = ['owner', 'admin'].includes(req.user.role) ? '/admin.html' : '/home.html';
   completeLogin(req, res, {
     message: "logged in",
     redirect: redirectPath
@@ -110,7 +113,8 @@ router.get('/profile', (req, res) => {
     csrfToken: req.session.csrfToken,
     username: req.user.username,
     email: req.user.email,
-    role: req.user.role
+    role: req.user.role,
+    team_title: req.user.team_title || null
   });
 });
 
@@ -126,7 +130,7 @@ router.get('/user_info', requireAdmin, (req, res) => {
       return res.sendStatus(500);
     }
 
-    const query = 'SELECT user_id, username, email, avatar_url, DATE(created_at) AS created_at, role FROM users';
+    const query = 'SELECT user_id, username, email, avatar_url, DATE(created_at) AS created_at, role, team_title FROM users';
     connection.query(query, (err, results) => {
       connection.release();
       if (err) {
@@ -154,7 +158,7 @@ router.post('/admin_del_user', requireAdmin, (req, res) => {
   const userID = Number(req.body.user_id);
   const currentUserID = Number(req.user.user_id);
 
-  if (!req.user || req.user.role !== 'admin') {
+  if (!req.user || !['owner', 'admin'].includes(req.user.role)) {
     return res.status(403).send('Admins only');
   }
 
@@ -172,7 +176,8 @@ router.post('/admin_del_user', requireAdmin, (req, res) => {
       return res.sendStatus(500);
     }
 
-    connection.query('DELETE FROM users WHERE user_id = ?', [userID], (err, results) => {
+    const removableRoles = req.user.role === 'owner' ? ['user', 'admin'] : ['user'];
+    connection.query('DELETE FROM users WHERE user_id = ? AND role IN (?)', [userID, removableRoles], (err, results) => {
       connection.release();
       if (err) {
         console.error('Query error:', err);

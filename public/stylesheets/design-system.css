@@ -35,6 +35,7 @@ body :is(button, select, input:not([type="checkbox"]):not([type="radio"]), .acti
 body :is(button, .action-link) { border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); padding: .65rem 1rem; cursor: pointer; font-weight: 650; text-decoration: none; }
 body button:hover:not(:disabled), body .action-link:hover { filter: brightness(.94); }
 body button:disabled { opacity: .65; cursor: default; }
+body .action-link { max-width: 100%; overflow-wrap: anywhere; }
 body :is(input, textarea, select) { min-width: 0; max-width: 100%; padding: .65rem .8rem; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
 body input::placeholder, body textarea::placeholder { color: var(--muted); opacity: 1; }
 body label { color: var(--ink); font-weight: 600; }
@@ -131,6 +132,8 @@ body .login-button { color: var(--on-accent); background: var(--accent); }
 body #error-message { color: var(--ink); }
 body #adminContent { max-width: 1200px; margin: auto; padding: 1rem; }
 body .customer-card { overflow-x: auto; }
+body #account-access-form { display: grid; gap: .6rem; max-width: 40rem; }
+body #owner-controls, body #adminContent > .panel { margin-block: 1.5rem; }
 .landing-hero { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(2rem, 6vw, 5rem); align-items: center; padding-block: 3rem 5rem; }
 .landing-hero h1 { font-size: clamp(2.5rem, 6vw, 5rem); max-width: 10ch; margin: 1rem 0; }
 .landing-hero p { max-width: 45ch; color: var(--muted); font-size: 1.1rem; }
